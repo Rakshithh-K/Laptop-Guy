@@ -12,7 +12,7 @@ function Inventory() {
     const fetchLaptops = async () => {
         try {
             const response = await axios.get(
-                "http://localhost:3000/api/laptops"
+                "https://name-laptop-billing-api.onrender.com/api/laptops"
             );
 
             setLaptops(response.data);

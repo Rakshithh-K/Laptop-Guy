@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000/api";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "https://name-laptop-billing-api.onrender.com";
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
@@ -14,10 +14,10 @@ const apiClient = axios.create({
 apiClient.interceptors.response.use(
     (response) => response,
     (error) => {
-        const message = 
-            error.response?.data?.message || 
-            error.response?.data?.error || 
-            error.message || 
+        const message =
+            error.response?.data?.message ||
+            error.response?.data?.error ||
+            error.message ||
             "An unexpected error occurred. Please try again.";
         return Promise.reject({ ...error, customMessage: message });
     }
