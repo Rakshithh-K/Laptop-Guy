@@ -1,6 +1,6 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "https://name-laptop-billing-api.onrender.com";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "https://name-laptop-billing-api.onrender.com/api";
 
 const apiClient = axios.create({
     baseURL: API_BASE_URL,
