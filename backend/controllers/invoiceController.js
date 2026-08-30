@@ -341,29 +341,35 @@ const getInvoicePdf = async (req, res, next) => {
 // @desc    Send invoice PDF to customer email
 // @route   POST /api/invoices/:id/send
 const sendInvoice = async (req, res, next) => {
+    const invoiceId = req.params.id;
+    console.log(`[Invoice] Send request received for invoice ID: ${invoiceId}`);
+    
     let invoice;
     try {
-        invoice = await Invoice.findById(req.params.id)
+        invoice = await Invoice.findById(invoiceId)
             .populate("customer")
             .populate("items.laptop")
             .populate("laptop");
 
         if (!invoice) {
+            console.warn(`[Invoice] Invoice not found: ${invoiceId}`);
             return res.status(404).json({
                 success: false,
-                message: "Invoice not found"
+                message: "Invoice not found."
             });
         }
 
         const customer = invoice.customer;
         if (!customer) {
+            console.warn(`[Invoice] Customer not linked to invoice: ${invoiceId}`);
             return res.status(404).json({
                 success: false,
-                message: "Customer associated with this invoice was not found"
+                message: "Customer associated with this invoice was not found."
             });
         }
 
         if (!customer.email || !customer.email.trim()) {
+            console.warn(`[Invoice] Customer email missing for: ${customer.name}`);
             return res.status(400).json({
                 success: false,
                 message: "Customer email address is required to send the invoice."
@@ -372,23 +378,52 @@ const sendInvoice = async (req, res, next) => {
 
         const normalized = normalizeInvoice(invoice);
 
-        // Generate the exact same PDF as download
-        const pdfBuffer = await generateInvoicePdf(normalized);
+        // 1. Generate PDF
+        console.log(`[Invoice] Starting PDF generation for ${normalized.invoiceNumber}...`);
+        let pdfBuffer;
+        try {
+            pdfBuffer = await generateInvoicePdf(normalized);
+            console.log(`[Invoice] PDF generated successfully (${pdfBuffer.length} bytes)`);
+        } catch (pdfErr) {
+            console.error(`[Invoice] PDF generation failed for ${normalized.invoiceNumber}:`, pdfErr);
+            return res.status(500).json({
+                success: false,
+                message: "Failed to generate invoice PDF. Please try downloading the PDF directly.",
+                error: pdfErr.message
+            });
+        }
 
-        // Send email
-        await sendInvoiceEmail({
-            to: customer.email.trim(),
-            customerName: customer.name,
-            invoiceNumber: normalized.invoiceNumber,
-            invoice: normalized,
-            pdfBuffer
-        });
+        // 2. Send Email
+        console.log(`[EmailService] Starting invoice email dispatch to ${customer.email}...`);
+        try {
+            await sendInvoiceEmail({
+                to: customer.email.trim(),
+                customerName: customer.name,
+                invoiceNumber: normalized.invoiceNumber,
+                invoice: normalized,
+                pdfBuffer
+            });
+        } catch (emailErr) {
+            console.error(`[EmailService] Invoice delivery error:`, emailErr);
+            
+            invoice.emailStatus = "FAILED";
+            invoice.emailError = emailErr.message;
+            await invoice.save().catch(() => { });
 
-        // Update email tracking status
+            return res.status(502).json({
+                success: false,
+                message: "Invoice PDF was generated, but email delivery failed. Please check email provider configuration on Render.",
+                error: emailErr.message
+            });
+        }
+
+        // 3. Success tracking
         invoice.emailStatus = "SENT";
         invoice.emailSentAt = new Date();
         invoice.emailError = null;
         await invoice.save();
+
+        console.log(`[EmailService] Email sent successfully for ${normalized.invoiceNumber} to ${customer.email}`);
 
         res.status(200).json({
             success: true,
@@ -396,7 +431,7 @@ const sendInvoice = async (req, res, next) => {
             email: customer.email
         });
     } catch (error) {
-        console.error("[EmailService] Invoice delivery error:", error);
+        console.error("[Invoice] Unexpected send invoice error:", error);
 
         if (invoice) {
             invoice.emailStatus = "FAILED";

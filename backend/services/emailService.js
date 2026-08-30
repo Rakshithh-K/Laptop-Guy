@@ -21,42 +21,13 @@ const formatDate = (dateString) => {
 };
 
 /**
- * Creates Nodemailer Transporter with connection timeouts
+ * Send email via Resend HTTPS API (Port 443 - Recommended for Render Cloud deployments)
  */
-const createTransporter = () => {
-  const user = process.env.GMAIL_USER || process.env.SMTP_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD
-    ? process.env.GMAIL_APP_PASSWORD.replace(/\s+/g, "")
-    : process.env.SMTP_PASS;
-
-  if (!user || !pass) {
-    throw new Error("Email credentials not configured. Please set RESEND_API_KEY, BREVO_API_KEY, or GMAIL_USER / GMAIL_APP_PASSWORD in environment variables.");
-  }
-
-  const host = process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = Number(process.env.SMTP_PORT) || 465;
-  const secure = port === 465;
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: {
-      user: user.trim(),
-      pass: pass.trim()
-    },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000
-  });
-};
-
-/**
- * Send email via Resend HTTPS API (Works 100% on Render Free tier without SMTP port blocks)
- */
-const sendViaResend = async ({ to, subject, html, text, filename, pdfBuffer, businessName, senderEmail }) => {
-  const apiKey = process.env.RESEND_API_KEY;
+const sendViaResend = async ({ to, subject, html, text, filename, pdfBuffer, businessName }) => {
+  const apiKey = process.env.EMAIL_API_KEY || process.env.RESEND_API_KEY;
   const fromAddress = process.env.EMAIL_FROM || `${businessName} <onboarding@resend.dev>`;
+
+  console.log(`[EmailService] Sending via Resend HTTPS API to: ${to} (From: ${fromAddress})`);
 
   const payload = {
     from: fromAddress,
@@ -75,25 +46,28 @@ const sendViaResend = async ({ to, subject, html, text, filename, pdfBuffer, bus
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
+      "Authorization": `Bearer ${apiKey.trim()}`,
       "Content-Type": "application/json"
     },
     body: JSON.stringify(payload)
   });
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.message || data.error || `Resend API error (${response.status})`);
+    const errorMsg = data.message || data.error || (Array.isArray(data.errors) ? data.errors.join(", ") : `HTTP ${response.status}`);
+    throw new Error(`Resend API Error: ${errorMsg}`);
   }
   return data;
 };
 
 /**
- * Send email via Brevo / Sendinblue HTTPS API
+ * Send email via Brevo / Sendinblue HTTPS API (Port 443)
  */
 const sendViaBrevo = async ({ to, customerName, subject, html, text, filename, pdfBuffer, businessName }) => {
-  const apiKey = process.env.BREVO_API_KEY;
-  const senderEmail = process.env.EMAIL_FROM || process.env.GMAIL_USER || "billing@nextgenlaptops.com";
+  const apiKey = process.env.BREVO_API_KEY || process.env.EMAIL_API_KEY;
+  const senderEmail = process.env.EMAIL_FROM || process.env.GMAIL_USER || businessConfig.email || "billing@nextgenlaptops.com";
+
+  console.log(`[EmailService] Sending via Brevo HTTPS API to: ${to}`);
 
   const payload = {
     sender: { name: businessName, email: senderEmail },
@@ -112,33 +86,136 @@ const sendViaBrevo = async ({ to, customerName, subject, html, text, filename, p
   const response = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: {
-      "api-key": apiKey,
+      "api-key": apiKey.trim(),
       "Content-Type": "application/json",
       "Accept": "application/json"
     },
     body: JSON.stringify(payload)
   });
 
-  const data = await response.json();
+  const data = await response.json().catch(() => ({}));
   if (!response.ok) {
-    throw new Error(data.message || `Brevo API error (${response.status})`);
+    const errorMsg = data.message || `HTTP ${response.status}`;
+    throw new Error(`Brevo API Error: ${errorMsg}`);
   }
   return data;
 };
 
 /**
- * Sends Invoice Email with PDF Attachment
+ * Send email via SendGrid HTTPS API (Port 443)
  */
-const sendInvoiceEmail = async ({ to, customerName, invoiceNumber, invoice, pdfBuffer }) => {
-  console.log(`[EmailService] Starting invoice email for ${invoiceNumber} to ${to}`);
+const sendViaSendGrid = async ({ to, subject, html, text, filename, pdfBuffer, businessName }) => {
+  const apiKey = process.env.SENDGRID_API_KEY || process.env.EMAIL_API_KEY;
+  const senderEmail = process.env.EMAIL_FROM || businessConfig.email || "billing@nextgenlaptops.com";
 
-  if (pdfBuffer) {
-    console.log(`[EmailService] PDF generated (Size: ${pdfBuffer.length} bytes)`);
+  console.log(`[EmailService] Sending via SendGrid HTTPS API to: ${to}`);
+
+  const payload = {
+    personalizations: [{ to: [{ email: to }] }],
+    from: { email: senderEmail, name: businessName },
+    subject,
+    content: [
+      { type: "text/plain", value: text },
+      { type: "text/html", value: html }
+    ],
+    attachments: [
+      {
+        content: pdfBuffer.toString("base64"),
+        filename,
+        type: "application/pdf",
+        disposition: "attachment"
+      }
+    ]
+  };
+
+  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey.trim()}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    const errorMsg = data.errors ? JSON.stringify(data.errors) : `HTTP ${response.status}`;
+    throw new Error(`SendGrid API Error: ${errorMsg}`);
+  }
+  return { success: true };
+};
+
+/**
+ * Fallback: Nodemailer SMTP with forced IPv4 and strict connection timeout
+ */
+const sendViaSmtp = async ({ to, subject, html, text, filename, pdfBuffer, businessName }) => {
+  const user = process.env.GMAIL_USER || process.env.SMTP_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD
+    ? process.env.GMAIL_APP_PASSWORD.replace(/\s+/g, "")
+    : process.env.SMTP_PASS;
+
+  if (!user || !pass) {
+    throw new Error("No transactional email API key (RESEND_API_KEY / EMAIL_API_KEY / BREVO_API_KEY) or SMTP credentials (GMAIL_USER / GMAIL_APP_PASSWORD) configured.");
   }
 
+  const host = process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = Number(process.env.SMTP_PORT) || 465;
+  const secure = port === 465;
+
+  console.log(`[EmailService] Creating transporter for ${host}:${port} (secure: ${secure})`);
+
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: {
+      user: user.trim(),
+      pass: pass.trim()
+    },
+    family: 4, // Force IPv4 to prevent ENETUNREACH IPv6 routing errors on Render
+    connectionTimeout: 5000, // 5s connection timeout
+    greetingTimeout: 5000,
+    socketTimeout: 8000
+  });
+
+  const mailOptions = {
+    from: `"${businessName}" <${user.trim()}>`,
+    to: to.trim(),
+    subject,
+    text,
+    html,
+    attachments: [
+      {
+        filename,
+        content: pdfBuffer,
+        contentType: "application/pdf"
+      }
+    ]
+  };
+
+  const info = await transporter.sendMail(mailOptions);
+  return info;
+};
+
+/**
+ * Main Entry Point: Sends Invoice Email with PDF Attachment
+ */
+const sendInvoiceEmail = async ({ to, customerName, invoiceNumber, invoice, pdfBuffer }) => {
+  console.log(`[EmailService] Starting invoice email for invoice #${invoiceNumber} to ${to}`);
+
+  if (!to || !to.trim()) {
+    throw new Error("Customer email address is required to send invoice.");
+  }
+
+  if (!pdfBuffer || pdfBuffer.length === 0) {
+    throw new Error("PDF buffer is empty or invalid. Cannot send invoice email without attached PDF.");
+  }
+
+  console.log(`[EmailService] PDF attachment ready (${pdfBuffer.length} bytes)`);
+
   const businessName = businessConfig.businessName || "Laptop_Guy Laptops & Computers";
-  const businessPhone = businessConfig.phone || "+91 98765 43210";
-  const businessEmail = businessConfig.email || "billing@nextgenlaptops.com";
+  const businessPhone = businessConfig.phone || "+91 7795330943";
+  const businessEmail = businessConfig.email || "laptopguysales@gmail.com";
   const invoiceDate = formatDate(invoice.createdAt);
   const totalAmount = formatCurrency(invoice.totalAmount);
   const paymentStatus = invoice.paymentStatus || "PAID";
@@ -196,7 +273,7 @@ const sendInvoiceEmail = async ({ to, customerName, invoiceNumber, invoice, pdfB
     
     <div class="content">
       <div class="greeting">Hello ${customerName || "Valued Customer"},</div>
-      <p class="intro">Thank you for your purchase. Please find your official tax invoice attached as a PDF for your records.</p>
+      <p class="intro">Thank you for your purchase. Please find your official tax invoice attached as a signed PDF for your records.</p>
       
       <div class="summary-card">
         <table style="width: 100%; border-collapse: collapse; font-size: 13.5px; margin-bottom: 12px;">
@@ -287,10 +364,9 @@ ${businessEmail}
   const subject = `Invoice ${invoiceNumber} from ${businessName}`;
   const filename = `Invoice-${invoiceNumber}.pdf`;
 
-  console.log(`[EmailService] Sending email to ${to}...`);
-
-  // 1. If RESEND_API_KEY is configured, use Resend HTTPS API (ideal for Render production)
-  if (process.env.RESEND_API_KEY) {
+  // 1. Check for Resend API Key (RESEND_API_KEY or EMAIL_API_KEY)
+  const resendKey = process.env.RESEND_API_KEY || (process.env.EMAIL_API_KEY && process.env.EMAIL_API_KEY.startsWith("re_") ? process.env.EMAIL_API_KEY : null);
+  if (resendKey) {
     console.log(`[EmailService] Delivering via Resend HTTPS API...`);
     const result = await sendViaResend({
       to: to.trim(),
@@ -299,14 +375,13 @@ ${businessEmail}
       text: plainText,
       filename,
       pdfBuffer,
-      businessName,
-      senderEmail: process.env.GMAIL_USER || businessEmail
+      businessName
     });
     console.log(`[EmailService] Email sent successfully via Resend API to ${to}. ID: ${result.id || "OK"}`);
     return result;
   }
 
-  // 2. If BREVO_API_KEY is configured, use Brevo HTTPS API
+  // 2. Check for Brevo API Key
   if (process.env.BREVO_API_KEY) {
     console.log(`[EmailService] Delivering via Brevo HTTPS API...`);
     const result = await sendViaBrevo({
@@ -323,25 +398,33 @@ ${businessEmail}
     return result;
   }
 
-  // 3. Fallback to Nodemailer SMTP
-  console.log(`[EmailService] Delivering via SMTP Transport...`);
-  const transporter = createTransporter();
-  const mailOptions = {
-    from: `"${businessName}" <${process.env.GMAIL_USER || process.env.SMTP_USER}>`,
+  // 3. Check for SendGrid API Key
+  if (process.env.SENDGRID_API_KEY) {
+    console.log(`[EmailService] Delivering via SendGrid HTTPS API...`);
+    const result = await sendViaSendGrid({
+      to: to.trim(),
+      subject,
+      html: emailHtml,
+      text: plainText,
+      filename,
+      pdfBuffer,
+      businessName
+    });
+    console.log(`[EmailService] Email sent successfully via SendGrid API to ${to}`);
+    return result;
+  }
+
+  // 4. Fallback to Nodemailer SMTP (IPv4 forced, 5s timeout)
+  console.log(`[EmailService] Delivering via SMTP Transport (IPv4 forced)...`);
+  const info = await sendViaSmtp({
     to: to.trim(),
     subject,
-    text: plainText,
     html: emailHtml,
-    attachments: [
-      {
-        filename,
-        content: pdfBuffer,
-        contentType: "application/pdf"
-      }
-    ]
-  };
-
-  const info = await transporter.sendMail(mailOptions);
+    text: plainText,
+    filename,
+    pdfBuffer,
+    businessName
+  });
   console.log(`[EmailService] Email sent successfully to ${to}. MessageId: ${info.messageId}`);
   return info;
 };
