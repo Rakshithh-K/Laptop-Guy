@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { useLocation } from "react-router-dom";
-import { Calendar, Store } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { Calendar, Store, LogOut, ShieldCheck } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 export default function Topbar() {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, logoutAdmin } = useAuth();
   const [currentDate, setCurrentDate] = useState("");
 
   useEffect(() => {
@@ -34,6 +37,13 @@ export default function Topbar() {
     return "Laptop Billing System";
   };
 
+  const handleLogout = async () => {
+    const confirmed = window.confirm("Are you sure you want to sign out?");
+    if (!confirmed) return;
+    await logoutAdmin();
+    navigate("/login", { replace: true });
+  };
+
   return (
     <header className="topbar">
       <div className="topbar-left">
@@ -48,8 +58,21 @@ export default function Topbar() {
 
         <div className="store-badge">
           <Store size={15} />
-          <span>Laptop_guy(Main Branch)</span>
+          <span>Laptop Guy (Main Branch)</span>
         </div>
+
+        {user && (
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleLogout}
+            title="Sign out of admin session"
+            style={{ color: "#ef4444", borderColor: "#fecaca" }}
+          >
+            <LogOut size={14} />
+            <span>Sign Out</span>
+          </button>
+        )}
       </div>
     </header>
   );
