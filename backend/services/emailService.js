@@ -25,7 +25,7 @@ const formatDate = (dateString) => {
  */
 const sendViaResend = async ({ to, subject, html, text, filename, pdfBuffer, businessName }) => {
   const apiKey = (process.env.RESEND_API_KEY || process.env.EMAIL_API_KEY || "").trim();
-  
+
   if (!apiKey) {
     throw new Error("RESEND_API_KEY is missing. Please add RESEND_API_KEY to your Render Dashboard Environment Variables.");
   }
@@ -44,7 +44,7 @@ const sendViaResend = async ({ to, subject, html, text, filename, pdfBuffer, bus
     attachments: [
       {
         filename,
-        content: pdfBuffer
+        content: pdfBuffer.toString("base64")
       }
     ]
   });
