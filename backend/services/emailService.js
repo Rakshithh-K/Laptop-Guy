@@ -1,4 +1,4 @@
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 const businessConfig = require("../config/businessConfig");
 
 /**
@@ -21,15 +21,21 @@ const formatDate = (dateString) => {
 };
 
 /**
- * Send email via Resend HTTPS API (Port 443 - Recommended for Render Cloud deployments)
+ * Send email via Resend HTTPS API (Port 443 - 100% Reliable on Render Production)
  */
 const sendViaResend = async ({ to, subject, html, text, filename, pdfBuffer, businessName }) => {
-  const apiKey = process.env.EMAIL_API_KEY || process.env.RESEND_API_KEY;
+  const apiKey = (process.env.RESEND_API_KEY || process.env.EMAIL_API_KEY || "").trim();
+  
+  if (!apiKey) {
+    throw new Error("RESEND_API_KEY is missing. Please add RESEND_API_KEY to your Render Dashboard Environment Variables.");
+  }
+
+  const resend = new Resend(apiKey);
   const fromAddress = process.env.EMAIL_FROM || `${businessName} <onboarding@resend.dev>`;
 
-  console.log(`[EmailService] Sending via Resend HTTPS API to: ${to} (From: ${fromAddress})`);
+  console.log(`[EmailService] Delivering via Resend HTTPS API to: ${to} (From: ${fromAddress})`);
 
-  const payload = {
+  const { data, error } = await resend.emails.send({
     from: fromAddress,
     to: [to],
     subject,
@@ -38,167 +44,23 @@ const sendViaResend = async ({ to, subject, html, text, filename, pdfBuffer, bus
     attachments: [
       {
         filename,
-        content: pdfBuffer.toString("base64")
+        content: pdfBuffer
       }
     ]
-  };
-
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey.trim()}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
   });
 
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const errorMsg = data.message || data.error || (Array.isArray(data.errors) ? data.errors.join(", ") : `HTTP ${response.status}`);
-    throw new Error(`Resend API Error: ${errorMsg}`);
+  if (error) {
+    const errorDetail = error.message || JSON.stringify(error);
+    console.error("[EmailService] Resend API Error:", errorDetail);
+    throw new Error(`Resend Delivery Error: ${errorDetail}`);
   }
+
+  console.log(`[EmailService] Email sent successfully via Resend API to ${to}. ID: ${data?.id || "OK"}`);
   return data;
 };
 
 /**
- * Send email via Brevo / Sendinblue HTTPS API (Port 443)
- */
-const sendViaBrevo = async ({ to, customerName, subject, html, text, filename, pdfBuffer, businessName }) => {
-  const apiKey = process.env.BREVO_API_KEY || process.env.EMAIL_API_KEY;
-  const senderEmail = process.env.EMAIL_FROM || process.env.GMAIL_USER || businessConfig.email || "billing@nextgenlaptops.com";
-
-  console.log(`[EmailService] Sending via Brevo HTTPS API to: ${to}`);
-
-  const payload = {
-    sender: { name: businessName, email: senderEmail },
-    to: [{ email: to, name: customerName || "Customer" }],
-    subject,
-    htmlContent: html,
-    textContent: text,
-    attachment: [
-      {
-        name: filename,
-        content: pdfBuffer.toString("base64")
-      }
-    ]
-  };
-
-  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      "api-key": apiKey.trim(),
-      "Content-Type": "application/json",
-      "Accept": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const errorMsg = data.message || `HTTP ${response.status}`;
-    throw new Error(`Brevo API Error: ${errorMsg}`);
-  }
-  return data;
-};
-
-/**
- * Send email via SendGrid HTTPS API (Port 443)
- */
-const sendViaSendGrid = async ({ to, subject, html, text, filename, pdfBuffer, businessName }) => {
-  const apiKey = process.env.SENDGRID_API_KEY || process.env.EMAIL_API_KEY;
-  const senderEmail = process.env.EMAIL_FROM || businessConfig.email || "billing@nextgenlaptops.com";
-
-  console.log(`[EmailService] Sending via SendGrid HTTPS API to: ${to}`);
-
-  const payload = {
-    personalizations: [{ to: [{ email: to }] }],
-    from: { email: senderEmail, name: businessName },
-    subject,
-    content: [
-      { type: "text/plain", value: text },
-      { type: "text/html", value: html }
-    ],
-    attachments: [
-      {
-        content: pdfBuffer.toString("base64"),
-        filename,
-        type: "application/pdf",
-        disposition: "attachment"
-      }
-    ]
-  };
-
-  const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey.trim()}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(payload)
-  });
-
-  if (!response.ok) {
-    const data = await response.json().catch(() => ({}));
-    const errorMsg = data.errors ? JSON.stringify(data.errors) : `HTTP ${response.status}`;
-    throw new Error(`SendGrid API Error: ${errorMsg}`);
-  }
-  return { success: true };
-};
-
-/**
- * Fallback: Nodemailer SMTP with forced IPv4 and strict connection timeout
- */
-const sendViaSmtp = async ({ to, subject, html, text, filename, pdfBuffer, businessName }) => {
-  const user = process.env.GMAIL_USER || process.env.SMTP_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD
-    ? process.env.GMAIL_APP_PASSWORD.replace(/\s+/g, "")
-    : process.env.SMTP_PASS;
-
-  if (!user || !pass) {
-    throw new Error("No transactional email API key (RESEND_API_KEY / EMAIL_API_KEY / BREVO_API_KEY) or SMTP credentials (GMAIL_USER / GMAIL_APP_PASSWORD) configured.");
-  }
-
-  const host = process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = Number(process.env.SMTP_PORT) || 465;
-  const secure = port === 465;
-
-  console.log(`[EmailService] Creating transporter for ${host}:${port} (secure: ${secure})`);
-
-  const transporter = nodemailer.createTransport({
-    host,
-    port,
-    secure,
-    auth: {
-      user: user.trim(),
-      pass: pass.trim()
-    },
-    family: 4, // Force IPv4 to prevent ENETUNREACH IPv6 routing errors on Render
-    connectionTimeout: 5000, // 5s connection timeout
-    greetingTimeout: 5000,
-    socketTimeout: 8000
-  });
-
-  const mailOptions = {
-    from: `"${businessName}" <${user.trim()}>`,
-    to: to.trim(),
-    subject,
-    text,
-    html,
-    attachments: [
-      {
-        filename,
-        content: pdfBuffer,
-        contentType: "application/pdf"
-      }
-    ]
-  };
-
-  const info = await transporter.sendMail(mailOptions);
-  return info;
-};
-
-/**
- * Main Entry Point: Sends Invoice Email with PDF Attachment
+ * Main Entry Point: Sends Invoice Email with Signed PDF Attachment over HTTPS
  */
 const sendInvoiceEmail = async ({ to, customerName, invoiceNumber, invoice, pdfBuffer }) => {
   console.log(`[EmailService] Starting invoice email for invoice #${invoiceNumber} to ${to}`);
@@ -320,7 +182,7 @@ const sendInvoiceEmail = async ({ to, customerName, invoiceNumber, invoice, pdfB
       </div>
 
       <p style="font-size: 13px; color: #64748b; margin-top: 16px;">
-        The official PDF copy of your tax invoice is attached with this email. Please keep it safe for any future warranty assistance.
+        The official signed PDF copy of your tax invoice is attached with this email. Please keep it safe for any future warranty assistance.
       </p>
     </div>
 
@@ -342,7 +204,7 @@ const sendInvoiceEmail = async ({ to, customerName, invoiceNumber, invoice, pdfB
   const plainText = `
 Hello ${customerName || "Customer"},
 
-Thank you for your purchase. Please find your invoice attached.
+Thank you for your purchase. Please find your official tax invoice attached as a signed PDF.
 
 Invoice Number: ${invoiceNumber}
 Invoice Date: ${invoiceDate}
@@ -364,59 +226,8 @@ ${businessEmail}
   const subject = `Invoice ${invoiceNumber} from ${businessName}`;
   const filename = `Invoice-${invoiceNumber}.pdf`;
 
-  // 1. Check for Resend API Key (RESEND_API_KEY or EMAIL_API_KEY)
-  const resendKey = process.env.RESEND_API_KEY || (process.env.EMAIL_API_KEY && process.env.EMAIL_API_KEY.startsWith("re_") ? process.env.EMAIL_API_KEY : null);
-  if (resendKey) {
-    console.log(`[EmailService] Delivering via Resend HTTPS API...`);
-    const result = await sendViaResend({
-      to: to.trim(),
-      subject,
-      html: emailHtml,
-      text: plainText,
-      filename,
-      pdfBuffer,
-      businessName
-    });
-    console.log(`[EmailService] Email sent successfully via Resend API to ${to}. ID: ${result.id || "OK"}`);
-    return result;
-  }
-
-  // 2. Check for Brevo API Key
-  if (process.env.BREVO_API_KEY) {
-    console.log(`[EmailService] Delivering via Brevo HTTPS API...`);
-    const result = await sendViaBrevo({
-      to: to.trim(),
-      customerName,
-      subject,
-      html: emailHtml,
-      text: plainText,
-      filename,
-      pdfBuffer,
-      businessName
-    });
-    console.log(`[EmailService] Email sent successfully via Brevo API to ${to}. ID: ${result.messageId || "OK"}`);
-    return result;
-  }
-
-  // 3. Check for SendGrid API Key
-  if (process.env.SENDGRID_API_KEY) {
-    console.log(`[EmailService] Delivering via SendGrid HTTPS API...`);
-    const result = await sendViaSendGrid({
-      to: to.trim(),
-      subject,
-      html: emailHtml,
-      text: plainText,
-      filename,
-      pdfBuffer,
-      businessName
-    });
-    console.log(`[EmailService] Email sent successfully via SendGrid API to ${to}`);
-    return result;
-  }
-
-  // 4. Fallback to Nodemailer SMTP (IPv4 forced, 5s timeout)
-  console.log(`[EmailService] Delivering via SMTP Transport (IPv4 forced)...`);
-  const info = await sendViaSmtp({
+  // Always use HTTPS API (Resend) - zero SMTP port blocking on Render
+  return await sendViaResend({
     to: to.trim(),
     subject,
     html: emailHtml,
@@ -425,8 +236,6 @@ ${businessEmail}
     pdfBuffer,
     businessName
   });
-  console.log(`[EmailService] Email sent successfully to ${to}. MessageId: ${info.messageId}`);
-  return info;
 };
 
 module.exports = {
