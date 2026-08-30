@@ -522,7 +522,8 @@ const generateInvoicePdf = async (invoice) => {
     try {
         const page = await browser.newPage();
         await page.setContent(htmlContent, {
-            waitUntil: ["domcontentloaded", "networkidle0"]
+            waitUntil: "domcontentloaded",
+            timeout: 30000
         });
 
         const pdfBuffer = await page.pdf({
