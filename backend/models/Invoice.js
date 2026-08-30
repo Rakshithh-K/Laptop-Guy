@@ -1,5 +1,20 @@
 const mongoose = require("mongoose");
 
+const invoiceItemSchema = new mongoose.Schema(
+    {
+        laptop: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Laptop",
+            required: true
+        },
+        sellingPrice: {
+            type: Number,
+            required: true
+        }
+    },
+    { _id: false }
+);
+
 const invoiceSchema = new mongoose.Schema(
     {
         invoiceNumber: {
@@ -14,15 +29,21 @@ const invoiceSchema = new mongoose.Schema(
             required: true
         },
 
+        // Multi-product items array
+        items: [invoiceItemSchema],
+
+        // Legacy / single product reference preserved for backward compatibility
         laptop: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: "Laptop",
-            required: true
+            ref: "Laptop"
+        },
+
+        subtotal: {
+            type: Number
         },
 
         sellingPrice: {
-            type: Number,
-            required: true
+            type: Number
         },
 
         discount: {
@@ -46,6 +67,11 @@ const invoiceSchema = new mongoose.Schema(
             required: true
         },
 
+        transactionId: {
+            type: String,
+            default: ""
+        },
+
         paymentStatus: {
             type: String,
             enum: ["PAID", "PARTIAL", "PENDING"],
@@ -58,9 +84,11 @@ const invoiceSchema = new mongoose.Schema(
         },
 
         warranty: {
-            type: String
+            type: String,
+            default: "30 Days Hardware Warranty"
         },
 
+        // Email delivery tracking fields
         emailStatus: {
             type: String,
             enum: ["PENDING", "SENT", "FAILED"],
@@ -68,11 +96,13 @@ const invoiceSchema = new mongoose.Schema(
         },
 
         emailSentAt: {
-            type: Date
+            type: Date,
+            default: null
         },
 
         emailError: {
-            type: String
+            type: String,
+            default: null
         }
     },
     {
@@ -80,6 +110,4 @@ const invoiceSchema = new mongoose.Schema(
     }
 );
 
-const Invoice = mongoose.model("Invoice", invoiceSchema);
-
-module.exports = Invoice;
+module.exports = mongoose.model("Invoice", invoiceSchema);

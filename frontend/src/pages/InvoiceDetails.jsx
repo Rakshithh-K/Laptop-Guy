@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
-import { 
-  ArrowLeft, 
-  Download, 
-  Printer, 
-  ShieldCheck, 
-  User, 
-  Laptop, 
+import {
+  ArrowLeft,
+  Download,
+  Printer,
+  ShieldCheck,
+  User,
+  Laptop,
   CreditCard,
   Building,
   AlertCircle,
@@ -19,11 +19,13 @@ import StatusBadge from "../components/StatusBadge";
 import Toast from "../components/Toast";
 import { getInvoiceById, downloadInvoicePdf, sendInvoice } from "../api/invoiceApi";
 import { getBusinessInfo } from "../api/dashboardApi";
+import logoImg from "../assets/logo.jpeg";
+import sigImg from "../assets/nawsig.jpeg";
 
 export default function InvoiceDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  
+
   const [invoice, setInvoice] = useState(null);
   const [businessInfo, setBusinessInfo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -139,14 +141,21 @@ export default function InvoiceDetails() {
   }
 
   const customer = invoice.customer || {};
-  const laptop = invoice.laptop || {};
-  const sellingPrice = invoice.sellingPrice || 0;
+  const items = (invoice.items && invoice.items.length > 0)
+    ? invoice.items
+    : (invoice.laptop ? [{ laptop: invoice.laptop, sellingPrice: invoice.sellingPrice || invoice.totalAmount }] : []);
+
+  const subtotal = invoice.subtotal !== undefined
+    ? invoice.subtotal
+    : items.reduce((sum, it) => sum + (Number(it.sellingPrice) || 0), 0) || invoice.sellingPrice || 0;
+
   const discount = invoice.discount || 0;
-  const taxableAmount = sellingPrice - discount;
   const tax = invoice.tax || 0;
-  const totalAmount = invoice.totalAmount || 0;
+  const taxableAmount = Math.max(0, subtotal - discount);
+  const totalAmount = invoice.totalAmount || (taxableAmount + tax);
   const amountPaid = invoice.amountPaid || 0;
   const balance = Math.max(0, totalAmount - amountPaid);
+  const transactionId = invoice.transactionId ? invoice.transactionId.trim() : "";
 
   return (
     <div style={{ maxWidth: "900px", margin: "0 auto" }}>
@@ -163,11 +172,11 @@ export default function InvoiceDetails() {
             <span>Print</span>
           </button>
 
-          <button 
-            type="button" 
+          <button
+            type="button"
             className="btn btn-primary"
             style={{ backgroundColor: "#0f172a" }}
-            onClick={handleSendEmail} 
+            onClick={handleSendEmail}
             disabled={sending}
           >
             <Send size={15} />
@@ -176,14 +185,14 @@ export default function InvoiceDetails() {
 
           <button type="button" className="btn btn-primary" onClick={handleDownload} disabled={downloading}>
             <Download size={16} />
-            <span>{downloading ? "Generating PDF..." : "Download PDF"}</span>
+            <span>{downloading ? "Preparing PDF..." : "Download PDF"}</span>
           </button>
         </div>
       </div>
 
       {/* Printable Invoice Sheet Card */}
       <div className="card" style={{ padding: "36px 40px", backgroundColor: "#ffffff" }}>
-        
+
         {/* Header */}
         <div style={{
           display: "flex",
@@ -194,20 +203,22 @@ export default function InvoiceDetails() {
           marginBottom: "24px"
         }}>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "6px" }}>
               <div style={{
-                width: "36px",
-                height: "36px",
+                width: "48px",
+                height: "48px",
                 borderRadius: "8px",
-                backgroundColor: "#2563eb",
-                color: "#ffffff",
+                overflow: "hidden",
+                border: "1px solid #e2e8f0",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                fontWeight: 800,
-                fontSize: "18px"
+                justifyContent: "center"
               }}>
-                N
+                <img
+                  src={logoImg}
+                  alt="Laptop Guy Logo"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
               </div>
               <div>
                 <h1 style={{ fontSize: "20px", fontWeight: 800, color: "#0f172a", margin: 0 }}>
@@ -220,9 +231,9 @@ export default function InvoiceDetails() {
             </div>
 
             <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.4 }}>
-              {businessInfo?.address || "#42, 1st Cross, Tech Innovation Zone, SP Road, Bangalore - 560002"}<br />
-              <strong>Phone:</strong> {businessInfo?.phone || "+91 98765 43210"} | <strong>Email:</strong> {businessInfo?.email || "billing@nextgenlaptops.com"}<br />
-              <strong>GSTIN:</strong> {businessInfo?.gstin || "29AAAAA0000A1Z5"}
+              {businessInfo?.address || "#667, Kumbarageri 3rd cross, C H Mohalla, Mysore - 57004"}<br />
+              <strong>Phone:</strong> {businessInfo?.phone || "+91 7795330943 / +91 80 2345 6789"} | <strong>Email:</strong> {businessInfo?.email || "billing@nextgenlaptops.com"}<br />
+              {businessInfo?.gstin && <span><strong>GSTIN:</strong> {businessInfo.gstin}</span>}
             </div>
           </div>
 
@@ -298,11 +309,16 @@ export default function InvoiceDetails() {
             <p style={{ fontSize: "12.5px", color: "#475569", marginBottom: "3px" }}>
               <strong>Payment Mode:</strong> {invoice.paymentMethod || "CASH"}
             </p>
+            {transactionId && (
+              <p style={{ fontSize: "12.5px", color: "#475569", marginBottom: "3px" }}>
+                <strong>Transaction ID / UTR:</strong> <span style={{ fontFamily: "var(--font-mono)", fontWeight: 700, color: "#0f172a" }}>{transactionId}</span>
+              </p>
+            )}
             <p style={{ fontSize: "12.5px", color: "#475569", marginBottom: "3px" }}>
               <strong>Payment Status:</strong> {invoice.paymentStatus || "PENDING"}
             </p>
             <p style={{ fontSize: "12.5px", color: "#475569", marginBottom: "3px" }}>
-              <strong>Warranty Coverage:</strong> {invoice.warranty || laptop.warranty || "30 Days Hardware"}
+              <strong>Warranty Coverage:</strong> {invoice.warranty || "30 Days Hardware"}
             </p>
             <p style={{ fontSize: "12.5px", color: "#475569" }}>
               <strong>Email Delivery:</strong> {invoice.emailStatus === "SENT" ? `Sent (${formatDate(invoice.emailSentAt)})` : invoice.emailStatus === "FAILED" ? "Failed" : "Pending"}
@@ -315,33 +331,41 @@ export default function InvoiceDetails() {
           <table className="table">
             <thead>
               <tr style={{ backgroundColor: "#0f172a", color: "#ffffff" }}>
-                <th style={{ color: "#ffffff" }}>Item & Technical Specifications</th>
-                <th style={{ color: "#ffffff", textAlign: "center" }}>Condition</th>
-                <th style={{ color: "#ffffff", textAlign: "center" }}>Qty</th>
-                <th style={{ color: "#ffffff", textAlign: "right" }}>Amount</th>
+                <th style={{ color: "#ffffff", width: "5%", textAlign: "center" }}>#</th>
+                <th style={{ color: "#ffffff", width: "55%" }}>Item & Technical Specifications</th>
+                <th style={{ color: "#ffffff", width: "15%", textAlign: "center" }}>Condition</th>
+                <th style={{ color: "#ffffff", width: "10%", textAlign: "center" }}>Qty</th>
+                <th style={{ color: "#ffffff", width: "15%", textAlign: "right" }}>Amount</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>
-                  <div style={{ fontWeight: 800, fontSize: "14px", color: "#0f172a", marginBottom: "4px" }}>
-                    {laptop.brand} {laptop.model}
-                  </div>
-                  <div style={{ fontSize: "12px", color: "#64748b", fontFamily: "var(--font-mono)", marginBottom: "4px" }}>
-                    Serial No: <strong>{laptop.serialNumber}</strong>
-                  </div>
-                  <div style={{ fontSize: "12px", color: "#475569" }}>
-                    {laptop.processor} • {laptop.ram} • {laptop.storage}
-                  </div>
-                </td>
-                <td style={{ textAlign: "center" }}>
-                  <StatusBadge status={laptop.condition} type="condition" />
-                </td>
-                <td style={{ textAlign: "center", fontWeight: 600 }}>1 Unit</td>
-                <td style={{ textAlign: "right", fontWeight: 700, fontSize: "14px", color: "#0f172a" }}>
-                  {formatCurrency(sellingPrice)}
-                </td>
-              </tr>
+              {items.map((item, index) => {
+                const l = item.laptop || {};
+                const itemPrice = item.sellingPrice !== undefined ? item.sellingPrice : (l.sellingPrice || 0);
+                return (
+                  <tr key={index}>
+                    <td style={{ textAlign: "center", fontWeight: 600, color: "#64748b" }}>{index + 1}</td>
+                    <td>
+                      <div style={{ fontWeight: 800, fontSize: "14px", color: "#0f172a", marginBottom: "3px" }}>
+                        {l.brand || ""} {l.model || "Certified Laptop"}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#64748b", fontFamily: "var(--font-mono)", marginBottom: "3px" }}>
+                        Serial No: <strong>{l.serialNumber || "N/A"}</strong>
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#475569" }}>
+                        {l.processor || ""} • {l.ram || ""} • {l.storage || ""}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <StatusBadge status={l.condition || "Used - Good"} type="condition" />
+                    </td>
+                    <td style={{ textAlign: "center", fontWeight: 600 }}>1 Unit</td>
+                    <td style={{ textAlign: "right", fontWeight: 700, fontSize: "14px", color: "#0f172a" }}>
+                      {formatCurrency(itemPrice)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -367,8 +391,8 @@ export default function InvoiceDetails() {
 
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "13px" }}>
-              <span style={{ color: "#64748b" }}>Selling Price:</span>
-              <strong style={{ color: "#1e293b" }}>{formatCurrency(sellingPrice)}</strong>
+              <span style={{ color: "#64748b" }}>Subtotal ({items.length} {items.length === 1 ? "Item" : "Items"}):</span>
+              <strong style={{ color: "#1e293b" }}>{formatCurrency(subtotal)}</strong>
             </div>
             {discount > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "13px" }}>
@@ -397,7 +421,7 @@ export default function InvoiceDetails() {
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "8px", fontSize: "13px" }}>
-              <span style={{ color: "#64748b" }}>Amount Paid ({invoice.paymentMethod}):</span>
+              <span style={{ color: "#64748b" }}>Amount Paid ({invoice.paymentMethod || "CASH"}):</span>
               <strong style={{ color: "#0f172a" }}>{formatCurrency(amountPaid)}</strong>
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", marginTop: "4px", fontSize: "13px" }}>
@@ -412,7 +436,7 @@ export default function InvoiceDetails() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "flex-end",
-          paddingTop: "24px",
+          paddingTop: "20px",
           borderTop: "1px dashed #cbd5e1"
         }}>
           <div style={{
@@ -427,16 +451,23 @@ export default function InvoiceDetails() {
             ★ {invoice.warranty || "30 Days"} Certified Warranty Active ★
           </div>
 
-          <div style={{ textAlign: "center", width: "200px" }}>
+          <div style={{ textAlign: "center", width: "220px" }}>
+            <div style={{ fontSize: "10.5px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", marginBottom: "4px" }}>
+              Authorized Signature
+            </div>
+            <img
+              src={sigImg}
+              alt="Authorized Signature"
+              style={{ maxWidth: "130px", maxHeight: "50px", objectFit: "contain", margin: "0 auto 4px auto", display: "block" }}
+            />
             <div style={{ borderTop: "1px solid #0f172a", paddingTop: "4px", fontSize: "12px", fontWeight: 700 }}>
-              Authorized Signatory
+              For {businessInfo?.businessName || "LAPTOP_GUY LAPTOPS AND COMPUTERS"}
             </div>
             <div style={{ fontSize: "10.5px", color: "#64748b" }}>
-              {businessInfo?.businessName || "LAPTOP_GUY LAPTOPS AND COMPUTERS"}
+              Authorized Signatory
             </div>
           </div>
         </div>
-
       </div>
 
       {/* Toast */}

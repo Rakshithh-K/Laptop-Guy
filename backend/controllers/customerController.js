@@ -69,6 +69,7 @@ const getCustomerById = async (req, res, next) => {
         }
 
         const invoices = await Invoice.find({ customer: customer._id })
+            .populate("items.laptop")
             .populate("laptop")
             .sort({ createdAt: -1 });
 

@@ -11,6 +11,7 @@ import {
   ArrowRight 
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import logoImg from "../assets/logo.jpeg";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -98,17 +99,19 @@ export default function Login() {
           borderBottom: "1px solid #1e293b"
         }}>
           <div style={{
-            width: "52px",
-            height: "52px",
-            backgroundColor: "#2563eb",
-            borderRadius: "12px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
+            width: "56px",
+            height: "56px",
+            borderRadius: "14px",
+            overflow: "hidden",
             margin: "0 auto 14px",
-            boxShadow: "0 8px 16px rgba(37, 99, 235, 0.35)"
+            boxShadow: "0 8px 20px rgba(0, 0, 0, 0.4)",
+            border: "1px solid rgba(255, 255, 255, 0.15)"
           }}>
-            <Laptop size={28} color="#ffffff" />
+            <img 
+              src={logoImg} 
+              alt="Laptop Guy Logo" 
+              style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+            />
           </div>
 
           <h1 style={{

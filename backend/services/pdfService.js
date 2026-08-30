@@ -1,5 +1,53 @@
 const puppeteer = require("puppeteer");
+const fs = require("fs");
+const path = require("path");
 const businessConfig = require("../config/businessConfig");
+
+/**
+ * Load logo as base64 data URI from the single source of truth (frontend/src/assets/logo.jpeg)
+ */
+const getLogoBase64 = () => {
+    try {
+        const possiblePaths = [
+            path.resolve(__dirname, "../../frontend/src/assets/logo.jpeg"),
+            path.resolve(process.cwd(), "frontend/src/assets/logo.jpeg"),
+            path.resolve(process.cwd(), "../frontend/src/assets/logo.jpeg")
+        ];
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                const imgBuffer = fs.readFileSync(p);
+                return `data:image/jpeg;base64,${imgBuffer.toString("base64")}`;
+            }
+        }
+        console.warn("[pdfService] Logo not found at frontend/src/assets/logo.jpeg");
+    } catch (e) {
+        console.error("Failed to read logo image for PDF:", e);
+    }
+    return "";
+};
+
+/**
+ * Load signature as base64 data URI from the single source of truth (frontend/src/assets/nawsig.jpeg)
+ */
+const getSignatureBase64 = () => {
+    try {
+        const possiblePaths = [
+            path.resolve(__dirname, "../../frontend/src/assets/nawsig.jpeg"),
+            path.resolve(process.cwd(), "frontend/src/assets/nawsig.jpeg"),
+            path.resolve(process.cwd(), "../frontend/src/assets/nawsig.jpeg")
+        ];
+        for (const p of possiblePaths) {
+            if (fs.existsSync(p)) {
+                const imgBuffer = fs.readFileSync(p);
+                return `data:image/jpeg;base64,${imgBuffer.toString("base64")}`;
+            }
+        }
+        console.warn("[pdfService] Signature not found at frontend/src/assets/nawsig.jpeg");
+    } catch (e) {
+        console.error("Failed to read signature image for PDF:", e);
+    }
+    return "";
+};
 
 /**
  * Format currency in Indian format
@@ -26,11 +74,26 @@ const formatDate = (dateString) => {
  */
 const generateInvoiceHtml = (invoice) => {
     const customer = invoice.customer || {};
-    const laptop = invoice.laptop || {};
     const amountPaid = invoice.amountPaid || 0;
     const totalAmount = invoice.totalAmount || 0;
     const balance = Math.max(0, totalAmount - amountPaid);
-    const taxableAmount = (invoice.sellingPrice || 0) - (invoice.discount || 0);
+
+    // Multi-item normalization for backward compatibility
+    const items = (invoice.items && invoice.items.length > 0)
+        ? invoice.items
+        : (invoice.laptop ? [{ laptop: invoice.laptop, sellingPrice: invoice.sellingPrice || invoice.totalAmount }] : []);
+
+    const subtotal = invoice.subtotal !== undefined
+        ? invoice.subtotal
+        : items.reduce((sum, it) => sum + (Number(it.sellingPrice) || 0), 0) || invoice.sellingPrice || 0;
+
+    const discount = invoice.discount || 0;
+    const tax = invoice.tax || 0;
+    const taxableAmount = Math.max(0, subtotal - discount);
+
+    const logoBase64 = getLogoBase64();
+    const sigBase64 = getSignatureBase64();
+    const transactionId = invoice.transactionId ? invoice.transactionId.trim() : "";
 
     const paymentStatusColor = invoice.paymentStatus === "PAID" ? "#10b981" : invoice.paymentStatus === "PARTIAL" ? "#f59e0b" : "#ef4444";
     const paymentStatusBg = invoice.paymentStatus === "PAID" ? "#ecfdf5" : invoice.paymentStatus === "PARTIAL" ? "#fffbeb" : "#fef2f2";
@@ -70,25 +133,18 @@ const generateInvoiceHtml = (invoice) => {
         .logo-title {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             margin-bottom: 6px;
         }
-        .logo-icon {
-            width: 38px;
-            height: 38px;
-            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        .logo-img {
+            width: 48px;
+            height: 48px;
+            object-fit: cover;
             border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: 800;
-            font-size: 20px;
-            text-align: center;
-            line-height: 38px;
+            border: 1px solid #e2e8f0;
         }
         .business-name {
-            font-size: 20px;
+            font-size: 19px;
             font-weight: 800;
             color: #0f172a;
             letter-spacing: -0.5px;
@@ -99,7 +155,7 @@ const generateInvoiceHtml = (invoice) => {
             text-transform: uppercase;
             letter-spacing: 0.8px;
             font-weight: 600;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
         .business-details {
             font-size: 11.5px;
@@ -117,7 +173,7 @@ const generateInvoiceHtml = (invoice) => {
             display: inline-block;
             background: #0f172a;
             color: #ffffff;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             letter-spacing: 1px;
             padding: 5px 14px;
@@ -158,7 +214,7 @@ const generateInvoiceHtml = (invoice) => {
             padding: 16px 20px;
         }
         .info-col h3 {
-            font-size: 12px;
+            font-size: 11.5px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.6px;
@@ -199,7 +255,7 @@ const generateInvoiceHtml = (invoice) => {
             text-align: center;
         }
         .items-table td {
-            padding: 12px;
+            padding: 11px 12px;
             border-bottom: 1px solid #e2e8f0;
             vertical-align: top;
             font-size: 12px;
@@ -213,13 +269,13 @@ const generateInvoiceHtml = (invoice) => {
         .item-name {
             font-weight: 700;
             color: #0f172a;
-            font-size: 13.5px;
-            margin-bottom: 4px;
+            font-size: 13px;
+            margin-bottom: 3px;
         }
         .item-spec-tags {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px;
+            gap: 5px;
             margin-top: 4px;
         }
         .spec-badge {
@@ -294,7 +350,7 @@ const generateInvoiceHtml = (invoice) => {
             font-size: 14px;
             font-weight: 800;
             color: #0f172a;
-            padding: 9px 10px;
+            padding: 8px 10px;
         }
         .totals-table tr.balance-row td {
             font-weight: 700;
@@ -307,8 +363,8 @@ const generateInvoiceHtml = (invoice) => {
             display: flex;
             justify-content: space-between;
             align-items: flex-end;
-            margin-top: 28px;
-            padding-top: 16px;
+            margin-top: 24px;
+            padding-top: 14px;
         }
         .warranty-seal {
             border: 2px dashed #3b82f6;
@@ -319,15 +375,23 @@ const generateInvoiceHtml = (invoice) => {
             font-size: 11px;
             font-weight: 700;
             text-align: center;
-            max-width: 240px;
+            max-width: 260px;
         }
         .signatory-box {
             text-align: center;
             width: 220px;
         }
+        .sig-img {
+            max-width: 140px;
+            max-height: 55px;
+            height: auto;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto 6px auto;
+        }
         .sign-line {
             border-top: 1px solid #0f172a;
-            margin-top: 40px;
+            margin-top: 6px;
             padding-top: 4px;
             font-size: 11.5px;
             font-weight: 700;
@@ -339,7 +403,7 @@ const generateInvoiceHtml = (invoice) => {
         }
 
         .footer {
-            margin-top: 20px;
+            margin-top: 18px;
             text-align: center;
             font-size: 10.5px;
             color: #94a3b8;
@@ -353,7 +417,7 @@ const generateInvoiceHtml = (invoice) => {
     <div class="header-container">
         <div class="business-info">
             <div class="logo-title">
-                <div class="logo-icon">N</div>
+                ${logoBase64 ? `<img src="${logoBase64}" class="logo-img" alt="Logo" />` : ""}
                 <div>
                     <h1 class="business-name">${businessConfig.businessName}</h1>
                     <div class="business-tagline">${businessConfig.tagline}</div>
@@ -386,10 +450,11 @@ const generateInvoiceHtml = (invoice) => {
             ${customer.gstin ? `<p><strong>GSTIN:</strong> ${customer.gstin}</p>` : ""}
         </div>
         <div class="info-col">
-            <h3>Transaction & Warranty Details</h3>
+            <h3>Transaction & Payment Details</h3>
             <p><strong>Payment Mode:</strong> ${invoice.paymentMethod || "CASH"}</p>
+            ${transactionId ? `<p><strong>Transaction ID / UTR:</strong> <span style="font-family: monospace; font-weight: 700; color: #0f172a;">${transactionId}</span></p>` : ""}
             <p><strong>Payment Status:</strong> ${invoice.paymentStatus || "PENDING"}</p>
-            <p><strong>Warranty Period:</strong> ${invoice.warranty || laptop.warranty || "Standard 30 Days"}</p>
+            <p><strong>Warranty Period:</strong> ${invoice.warranty || "Standard 30 Days Hardware"}</p>
             <p><strong>Invoice Reference:</strong> ${invoice._id ? `INV-${invoice._id.toString().slice(-6).toUpperCase()}` : invoice.invoiceNumber}</p>
         </div>
     </div>
@@ -398,7 +463,7 @@ const generateInvoiceHtml = (invoice) => {
     <table class="items-table">
         <thead>
             <tr>
-                <th style="width: 5%;">#</th>
+                <th style="width: 5%;" class="text-center">#</th>
                 <th style="width: 55%;">Item Description & Technical Specifications</th>
                 <th style="width: 15%;" class="text-center">Condition</th>
                 <th style="width: 10%;" class="text-center">Qty</th>
@@ -406,28 +471,34 @@ const generateInvoiceHtml = (invoice) => {
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <td>1</td>
-                <td>
-                    <div class="item-name">${laptop.brand || ""} ${laptop.model || "Certified Laptop"}</div>
-                    <div style="font-size: 11px; color: #475569; margin-bottom: 4px;">
-                        <strong>Serial No:</strong> ${laptop.serialNumber || "N/A"}
-                    </div>
-                    <div class="item-spec-tags">
-                        <span class="spec-badge">CPU: ${laptop.processor || "N/A"}</span>
-                        <span class="spec-badge">RAM: ${laptop.ram || "N/A"}</span>
-                        <span class="spec-badge">Storage: ${laptop.storage || "N/A"}</span>
-                        <span class="spec-badge">Warranty: ${invoice.warranty || laptop.warranty || "30 Days"}</span>
-                    </div>
-                </td>
-                <td class="text-center">
-                    <span style="font-weight: 600; color: #0284c7;">${laptop.condition || "Used - Good"}</span>
-                </td>
-                <td class="text-center">1 Unit</td>
-                <td class="text-right" style="font-weight: 700; font-size: 13px;">
-                    ${formatCurrency(invoice.sellingPrice)}
-                </td>
-            </tr>
+            ${items.map((item, index) => {
+        const l = item.laptop || {};
+        const itemPrice = item.sellingPrice !== undefined ? item.sellingPrice : (l.sellingPrice || 0);
+        return `
+                <tr>
+                    <td class="text-center" style="font-weight: 600; color: #64748b;">${index + 1}</td>
+                    <td>
+                        <div class="item-name">${l.brand || ""} ${l.model || "Certified Laptop"}</div>
+                        <div style="font-size: 11px; color: #475569; margin-bottom: 4px;">
+                            <strong>Serial No:</strong> ${l.serialNumber || "N/A"}
+                        </div>
+                        <div class="item-spec-tags">
+                            <span class="spec-badge">CPU: ${l.processor || "N/A"}</span>
+                            <span class="spec-badge">RAM: ${l.ram || "N/A"}</span>
+                            <span class="spec-badge">Storage: ${l.storage || "N/A"}</span>
+                            <span class="spec-badge">Warranty: ${l.warranty || invoice.warranty || "30 Days"}</span>
+                        </div>
+                    </td>
+                    <td class="text-center">
+                        <span style="font-weight: 600; color: #0284c7;">${l.condition || "Used - Good"}</span>
+                    </td>
+                    <td class="text-center">1 Unit</td>
+                    <td class="text-right" style="font-weight: 700; font-size: 13px;">
+                        ${formatCurrency(itemPrice)}
+                    </td>
+                </tr>
+                `;
+    }).join("")}
         </tbody>
     </table>
 
@@ -446,23 +517,23 @@ const generateInvoiceHtml = (invoice) => {
         <div>
             <table class="totals-table">
                 <tr>
-                    <td>Selling Price</td>
-                    <td>${formatCurrency(invoice.sellingPrice)}</td>
+                    <td>Subtotal (${items.length} ${items.length === 1 ? "Item" : "Items"})</td>
+                    <td>${formatCurrency(subtotal)}</td>
                 </tr>
-                ${invoice.discount > 0 ? `
+                ${discount > 0 ? `
                 <tr>
                     <td>Discount Applied</td>
-                    <td style="color: #16a34a;">- ${formatCurrency(invoice.discount)}</td>
+                    <td style="color: #16a34a;">- ${formatCurrency(discount)}</td>
                 </tr>
                 <tr>
                     <td>Taxable Amount</td>
                     <td>${formatCurrency(taxableAmount)}</td>
                 </tr>
                 ` : ""}
-                ${invoice.tax > 0 ? `
+                ${tax > 0 ? `
                 <tr>
                     <td>Tax / GST</td>
-                    <td>+ ${formatCurrency(invoice.tax)}</td>
+                    <td>+ ${formatCurrency(tax)}</td>
                 </tr>
                 ` : ""}
                 <tr class="total-row">
@@ -485,9 +556,13 @@ const generateInvoiceHtml = (invoice) => {
     <div class="signature-section">
         <div class="warranty-seal">
             ★ OFFICIAL CERTIFIED SALE ★<br>
-            Warranty: ${invoice.warranty || laptop.warranty || "30 Days Hardware"}
+            Warranty: ${invoice.warranty || "30 Days Hardware"}
         </div>
         <div class="signatory-box">
+            <div style="font-size: 10.5px; font-weight: 700; color: #64748b; margin-bottom: 4px; text-transform: uppercase;">
+                Authorized Signature
+            </div>
+            ${sigBase64 ? `<img src="${sigBase64}" class="sig-img" alt="Authorized Signature" />` : `<div style="height: 36px;"></div>`}
             <div class="sign-line">For ${businessConfig.businessName}</div>
             <div class="sign-sub">Authorized Signatory</div>
         </div>
@@ -508,7 +583,7 @@ const generateInvoiceHtml = (invoice) => {
 const generateInvoicePdf = async (invoice) => {
     const htmlContent = generateInvoiceHtml(invoice);
 
-    const browser = await puppeteer.launch({
+    const launchOptions = {
         headless: "new",
         args: [
             "--no-sandbox",
@@ -517,7 +592,41 @@ const generateInvoicePdf = async (invoice) => {
             "--disable-accelerated-2d-canvas",
             "--disable-gpu"
         ]
-    });
+    };
+
+    // Auto-detect browser executable path if configured or present on system
+    if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+        launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+    } else {
+        const candidatePaths = [
+            // Windows common Chrome & Edge paths
+            "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+            "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+            "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+            "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+            ...(process.env.LOCALAPPDATA ? [
+                path.join(process.env.LOCALAPPDATA, "Google\\Chrome\\Application\\chrome.exe"),
+                path.join(process.env.LOCALAPPDATA, "Microsoft\\Edge\\Application\\msedge.exe")
+            ] : []),
+            // Linux / Render paths
+            "/usr/bin/google-chrome-stable",
+            "/usr/bin/google-chrome",
+            "/usr/bin/chromium-browser",
+            "/usr/bin/chromium",
+            // Mac paths
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+        ];
+        for (const p of candidatePaths) {
+            if (fs.existsSync(p)) {
+                launchOptions.executablePath = p;
+                break;
+            }
+        }
+    }
+
+    const browser = await puppeteer.launch(launchOptions);
 
     try {
         const page = await browser.newPage();
@@ -539,7 +648,9 @@ const generateInvoicePdf = async (invoice) => {
 
         return pdfBuffer;
     } finally {
-        await browser.close();
+        if (browser) {
+            await browser.close().catch(() => { });
+        }
     }
 };
 

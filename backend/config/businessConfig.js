@@ -2,11 +2,11 @@
 module.exports = {
     businessName: "LAPTOP_GUY LAPTOPS AND COMPUTERS",
     tagline: "Certified Pre-Owned Laptops & Workstations",
-    address: "#42, 1st Cross, Tech Innovation Zone, SP Road, Bangalore - 560002",
-    phone: "+91 98765 43210 / +91 80 2345 6789",
-    email: "billing@nextgenlaptops.com",
+    address: "#667, Kumbarageri 3rd cross, C H Mohalla, Mysore - 57004",
+    phone: "+91 7795330943/ +91 80 2345 6789",
+    email: "laptopguysales@gmail.com",
     website: "www.nextgenlaptops.com",
-    gstin: "29AAAAA0000A1Z5",
+    //gstin: "29AAAAA0000A1Z5",
     bankDetails: {
         bankName: "HDFC Bank",
         accountNumber: "50200012345678",

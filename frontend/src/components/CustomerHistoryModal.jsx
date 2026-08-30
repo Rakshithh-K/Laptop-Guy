@@ -112,7 +112,20 @@ export default function CustomerHistoryModal({ isOpen, onClose, customer, onSele
                       })}
                     </td>
                     <td>
-                      {inv.laptop ? `${inv.laptop.brand} ${inv.laptop.model}` : "Laptop Record"}
+                      {(() => {
+                        const items = (inv.items && inv.items.length > 0)
+                          ? inv.items
+                          : (inv.laptop ? [{ laptop: inv.laptop }] : []);
+                        if (items.length > 1) {
+                          return (
+                            <span style={{ fontWeight: 600, color: "#2563eb" }}>
+                              {items.length} Products ({items.map(it => `${it.laptop?.brand || ""} ${it.laptop?.model || ""}`.trim()).filter(Boolean).join(", ")})
+                            </span>
+                          );
+                        }
+                        const l = items[0]?.laptop || inv.laptop;
+                        return l ? `${l.brand} ${l.model}` : "Laptop Record";
+                      })()}
                     </td>
                     <td style={{ fontWeight: 700 }}>
                       {formatCurrency(inv.totalAmount)}

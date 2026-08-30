@@ -79,6 +79,12 @@ export default function InvoiceSuccessModal({
     }).format(val || 0);
   };
 
+  const items = (invoice.items && invoice.items.length > 0)
+    ? invoice.items
+    : (invoice.laptop ? [{ laptop: invoice.laptop, sellingPrice: invoice.sellingPrice || invoice.totalAmount }] : []);
+
+  const productNames = items.map(it => `${it.laptop?.brand || ""} ${it.laptop?.model || "Laptop"}`).filter(Boolean).join(", ") || `${laptop.brand || ""} ${laptop.model || "Certified Laptop"}`;
+
   return (
     <Modal
       isOpen={isOpen}
@@ -102,10 +108,10 @@ export default function InvoiceSuccessModal({
         </div>
 
         <h3 style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a", marginBottom: "4px" }}>
-          Bill Created & Laptop Sold!
+          Bill Created & Laptop(s) Sold!
         </h3>
         <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "16px" }}>
-          Invoice <strong style={{ color: "#0f172a", fontFamily: "var(--font-mono)" }}>{invoice.invoiceNumber}</strong> has been saved and the laptop inventory status is updated to SOLD.
+          Invoice <strong style={{ color: "#0f172a", fontFamily: "var(--font-mono)" }}>{invoice.invoiceNumber}</strong> has been saved and the inventory status for {items.length} {items.length === 1 ? "product" : "products"} is updated to SOLD.
         </p>
 
         {/* Email Feedback Banner */}
@@ -163,9 +169,15 @@ export default function InvoiceSuccessModal({
             <strong style={{ color: "#0f172a" }}>{customer.name} {customer.email ? `(${customer.email})` : ""}</strong>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
-            <span style={{ color: "#64748b" }}>Laptop:</span>
-            <strong style={{ color: "#0f172a" }}>{laptop.brand} {laptop.model}</strong>
+            <span style={{ color: "#64748b" }}>Purchased ({items.length}):</span>
+            <strong style={{ color: "#0f172a", maxWidth: "250px", textAlign: "right" }}>{productNames}</strong>
           </div>
+          {invoice.transactionId && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
+              <span style={{ color: "#64748b" }}>UTR / Ref:</span>
+              <strong style={{ color: "#0f172a", fontFamily: "monospace" }}>{invoice.transactionId}</strong>
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "5px" }}>
             <span style={{ color: "#64748b" }}>Total Amount:</span>
             <strong style={{ color: "#2563eb", fontSize: "14px" }}>{formatCurrency(invoice.totalAmount)}</strong>

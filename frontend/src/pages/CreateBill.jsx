@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { 
-  ReceiptText, 
-  User, 
-  Laptop, 
-  CreditCard, 
-  Calculator, 
-  ShieldCheck, 
-  Eye, 
-  CheckCircle2, 
+import {
+  ReceiptText,
+  User,
+  Laptop,
+  CreditCard,
+  Calculator,
+  ShieldCheck,
+  Eye,
+  CheckCircle2,
   Search,
   Plus,
+  Trash2,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Hash
 } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import InvoicePreviewModal from "../components/InvoicePreviewModal";
@@ -20,6 +22,7 @@ import Toast from "../components/Toast";
 import { getLaptops } from "../api/laptopApi";
 import { getCustomers } from "../api/customerApi";
 import { createInvoice } from "../api/invoiceApi";
+import sigImg from "../assets/nawsig.jpeg";
 
 export default function CreateBill() {
   // Master data
@@ -31,7 +34,7 @@ export default function CreateBill() {
   const [customerMode, setCustomerMode] = useState("EXISTING");
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
-  
+
   const [newCustomer, setNewCustomer] = useState({
     name: "",
     phone: "",
@@ -40,14 +43,16 @@ export default function CreateBill() {
     gstin: ""
   });
 
-  // Laptop Selection
-  const [selectedLaptopId, setSelectedLaptopId] = useState("");
-  const [laptopSearch, setLaptopSearch] = useState("");
+  // Multiple Laptop Items: [{ laptopId: "", laptop: null }]
+  const [items, setItems] = useState([
+    { laptopId: "", laptop: null }
+  ]);
 
   // Billing & Payment Calculation
   const [discount, setDiscount] = useState(0);
   const [tax, setTax] = useState(0);
   const [paymentMethod, setPaymentMethod] = useState("UPI");
+  const [transactionId, setTransactionId] = useState("");
   const [paymentStatus, setPaymentStatus] = useState("PAID");
   const [amountPaid, setAmountPaid] = useState("");
   const [warrantyOverride, setWarrantyOverride] = useState("");
@@ -89,47 +94,95 @@ export default function CreateBill() {
 
   // Selected entities
   const selectedCustomer = customers.find((c) => c._id === selectedCustomerId) || null;
-  const selectedLaptop = availableLaptops.find((l) => l._id === selectedLaptopId) || null;
 
-  // Auto set warranty & amount paid when laptop changes
-  useEffect(() => {
-    if (selectedLaptop) {
-      setWarrantyOverride(selectedLaptop.warranty || "30 Days Hardware Warranty");
-      const sellPrice = Number(selectedLaptop.sellingPrice) || 0;
-      const initialTotal = Math.max(0, sellPrice - (Number(discount) || 0)) + (Number(tax) || 0);
-      setAmountPaid(initialTotal.toString());
-      setPaymentStatus("PAID");
-    } else {
-      setWarrantyOverride("");
-      setAmountPaid("");
-    }
-  }, [selectedLaptopId]);
+  // Selected laptop objects array
+  const selectedLaptops = items.map(it => it.laptop).filter(Boolean);
 
   // Pricing calculations
-  const sellingPrice = selectedLaptop ? Number(selectedLaptop.sellingPrice) || 0 : 0;
+  const subtotal = items.reduce((acc, it) => acc + (it.laptop ? Number(it.laptop.sellingPrice) || 0 : 0), 0);
   const numDiscount = Math.max(0, Number(discount) || 0);
-  const taxableAmount = Math.max(0, sellingPrice - numDiscount);
+  const taxableAmount = Math.max(0, subtotal - numDiscount);
   const numTax = Math.max(0, Number(tax) || 0);
   const totalAmount = taxableAmount + numTax;
   const numAmountPaid = Math.max(0, Number(amountPaid) || 0);
   const balance = Math.max(0, totalAmount - numAmountPaid);
 
-  // Sync amountPaid when discount or tax changes if in PAID mode
+  const isOnlinePayment = ["UPI", "CARD", "BANK_TRANSFER"].includes(paymentMethod);
+
+  // Auto sync amount paid and warranty when items change
+  useEffect(() => {
+    if (selectedLaptops.length > 0) {
+      if (!warrantyOverride) {
+        setWarrantyOverride(selectedLaptops[0].warranty || "30 Days Hardware Warranty");
+      }
+      if (paymentStatus === "PAID") {
+        setAmountPaid(totalAmount.toString());
+      }
+    } else {
+      setAmountPaid("");
+    }
+  }, [subtotal, numDiscount, numTax]);
+
+  // Handle adding an item row
+  const handleAddItem = () => {
+    setItems([...items, { laptopId: "", laptop: null }]);
+  };
+
+  // Handle removing an item row
+  const handleRemoveItem = (index) => {
+    if (items.length <= 1) {
+      setItems([{ laptopId: "", laptop: null }]);
+      return;
+    }
+    const newItems = items.filter((_, idx) => idx !== index);
+    setItems(newItems);
+  };
+
+  // Handle laptop selection in a row
+  const handleSelectLaptop = (index, laptopId) => {
+    if (laptopId) {
+      // Check for duplicate selection across other rows
+      const isAlreadySelected = items.some((it, idx) => idx !== index && it.laptopId === laptopId);
+      if (isAlreadySelected) {
+        showToast("This laptop is already selected in another row.", "error");
+        return;
+      }
+    }
+
+    const laptop = availableLaptops.find((l) => l._id === laptopId) || null;
+    const newItems = [...items];
+    newItems[index] = { laptopId, laptop };
+    setItems(newItems);
+
+    if (laptop && !warrantyOverride) {
+      setWarrantyOverride(laptop.warranty || "30 Days Hardware Warranty");
+    }
+  };
+
+  // Sync amountPaid when discount changes
   const handleDiscountChange = (val) => {
-    const d = Math.max(0, Number(val) || 0);
     setDiscount(val);
-    const newTotal = Math.max(0, sellingPrice - d) + numTax;
+    const d = Math.max(0, Number(val) || 0);
+    const newTotal = Math.max(0, subtotal - d) + numTax;
     if (paymentStatus === "PAID") {
       setAmountPaid(newTotal.toString());
     }
   };
 
+  // Sync amountPaid when tax changes
   const handleTaxChange = (val) => {
-    const t = Math.max(0, Number(val) || 0);
     setTax(val);
+    const t = Math.max(0, Number(val) || 0);
     const newTotal = taxableAmount + t;
     if (paymentStatus === "PAID") {
       setAmountPaid(newTotal.toString());
+    }
+  };
+
+  const handlePaymentMethodChange = (val) => {
+    setPaymentMethod(val);
+    if (val === "CASH") {
+      setTransactionId("");
     }
   };
 
@@ -171,19 +224,34 @@ export default function CreateBill() {
     }
 
     // Laptop validation
-    if (!selectedLaptopId) {
-      setFormError("Please select an available laptop for this bill.");
+    const validItems = items.filter(it => it.laptopId && it.laptop);
+    if (validItems.length === 0) {
+      setFormError("Please select at least one available laptop for this bill.");
+      return false;
+    }
+
+    // Duplicate check
+    const laptopIds = validItems.map(it => it.laptopId);
+    const uniqueIds = new Set(laptopIds);
+    if (uniqueIds.size !== laptopIds.length) {
+      setFormError("Duplicate laptops selected. Each laptop can only be added once.");
       return false;
     }
 
     // Price validation
-    if (numDiscount > sellingPrice) {
-      setFormError("Discount cannot exceed laptop selling price.");
+    if (numDiscount > subtotal) {
+      setFormError("Discount cannot exceed total subtotal.");
       return false;
     }
 
     if (numAmountPaid > totalAmount) {
       setFormError("Amount paid cannot exceed total invoice amount.");
+      return false;
+    }
+
+    // Online Payment validation: Transaction ID / UTR is required
+    if (isOnlinePayment && !transactionId.trim()) {
+      setFormError("Transaction ID / UTR Number is required for online payments (UPI, Card, Bank Transfer).");
       return false;
     }
 
@@ -201,14 +269,22 @@ export default function CreateBill() {
     setFormError("");
 
     try {
+      const validItems = items.filter(it => it.laptopId && it.laptop);
+
       const payload = {
-        laptopId: selectedLaptopId,
+        items: validItems.map(it => ({
+          laptopId: it.laptopId,
+          sellingPrice: Number(it.laptop.sellingPrice)
+        })),
+        // Fallback for single item
+        laptopId: validItems[0].laptopId,
         discount: numDiscount,
         tax: numTax,
         paymentMethod,
+        transactionId: isOnlinePayment ? transactionId.trim() : "",
         paymentStatus,
         amountPaid: numAmountPaid,
-        warranty: warrantyOverride || selectedLaptop?.warranty
+        warranty: warrantyOverride || validItems[0].laptop.warranty || "30 Days Hardware Warranty"
       };
 
       if (customerMode === "EXISTING") {
@@ -223,7 +299,7 @@ export default function CreateBill() {
       setSuccessModalOpen(true);
       showToast(`Invoice ${invoice.invoiceNumber} created successfully!`, "success");
 
-      // Reload inventory so the sold laptop disappears from available list
+      // Reload inventory so sold laptops disappear from available list
       loadData();
     } catch (err) {
       setFormError(err.customMessage || "Failed to generate invoice. Please try again.");
@@ -234,13 +310,14 @@ export default function CreateBill() {
   };
 
   const handleResetForm = () => {
-    setSelectedLaptopId("");
+    setItems([{ laptopId: "", laptop: null }]);
     setSelectedCustomerId("");
     setCustomerMode("EXISTING");
     setNewCustomer({ name: "", phone: "", email: "", address: "", gstin: "" });
     setDiscount(0);
     setTax(0);
     setPaymentMethod("UPI");
+    setTransactionId("");
     setPaymentStatus("PAID");
     setAmountPaid("");
     setWarrantyOverride("");
@@ -262,13 +339,6 @@ export default function CreateBill() {
       c.phone.includes(customerSearch)
   );
 
-  const filteredLaptops = availableLaptops.filter(
-    (l) =>
-      l.brand.toLowerCase().includes(laptopSearch.toLowerCase()) ||
-      l.model.toLowerCase().includes(laptopSearch.toLowerCase()) ||
-      l.serialNumber.toLowerCase().includes(laptopSearch.toLowerCase())
-  );
-
   const resolvedCustomerData =
     customerMode === "EXISTING" && selectedCustomer
       ? selectedCustomer
@@ -283,7 +353,7 @@ export default function CreateBill() {
             Create Customer Bill
           </h2>
           <p style={{ fontSize: "13px", color: "#64748b" }}>
-            Select an available laptop from inventory, assign customer details, and issue an official tax invoice.
+            Select one or multiple laptops from inventory, assign customer details, and issue an official tax invoice.
           </p>
         </div>
 
@@ -304,19 +374,20 @@ export default function CreateBill() {
           display: "flex",
           alignItems: "center",
           gap: "10px",
-          fontSize: "13.5px",
-          fontWeight: 600
+          fontSize: "13px",
+          fontWeight: 500
         }}>
           <AlertCircle size={18} />
           <span>{formError}</span>
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "24px", alignItems: "start" }}>
-        {/* Left Column: Customer & Laptop Selection */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 0.9fr", gap: "24px", alignItems: "start" }}>
+
+        {/* Left Column: Customer & Invoice Items */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          
-          {/* SECTION 1: CUSTOMER DETAILS */}
+
+          {/* SECTION 1: CUSTOMER SELECTION */}
           <div className="card">
             <div className="card-header" style={{ marginBottom: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -325,25 +396,25 @@ export default function CreateBill() {
                 </div>
                 <div>
                   <h3 className="card-title">Customer Information</h3>
-                  <div className="card-subtitle">Select existing or register buyer</div>
+                  <div className="card-subtitle">Select existing or register a new customer profile</div>
                 </div>
               </div>
 
-              {/* Mode Toggle */}
-              <div className="filter-tabs">
+              <div style={{ display: "flex", gap: "6px" }}>
                 <button
                   type="button"
-                  className={`filter-tab ${customerMode === "EXISTING" ? "active" : ""}`}
+                  className={`btn btn-sm ${customerMode === "EXISTING" ? "btn-primary" : "btn-secondary"}`}
                   onClick={() => setCustomerMode("EXISTING")}
                 >
                   Existing Customer
                 </button>
                 <button
                   type="button"
-                  className={`filter-tab ${customerMode === "NEW" ? "active" : ""}`}
+                  className={`btn btn-sm ${customerMode === "NEW" ? "btn-primary" : "btn-secondary"}`}
                   onClick={() => setCustomerMode("NEW")}
                 >
-                  + New Customer
+                  <Plus size={13} />
+                  <span>New Customer</span>
                 </button>
               </div>
             </div>
@@ -461,7 +532,7 @@ export default function CreateBill() {
             )}
           </div>
 
-          {/* SECTION 2: SELECT LAPTOP */}
+          {/* SECTION 2: MULTIPLE PRODUCTS / LAPTOPS */}
           <div className="card">
             <div className="card-header" style={{ marginBottom: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -469,84 +540,146 @@ export default function CreateBill() {
                   2
                 </div>
                 <div>
-                  <h3 className="card-title">Select Available Laptop</h3>
-                  <div className="card-subtitle">Authoritative specs and locked selling price from database</div>
+                  <h3 className="card-title">Invoice Items ({items.length} {items.length === 1 ? "Product" : "Products"})</h3>
+                  <div className="card-subtitle">Select one or multiple laptops from available inventory</div>
                 </div>
               </div>
 
-              <span className="badge badge-available">
-                {availableLaptops.length} Units In Stock
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span className="badge badge-available">
+                  {availableLaptops.length} Units In Stock
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  onClick={handleAddItem}
+                  style={{ backgroundColor: "#2563eb" }}
+                >
+                  <Plus size={13} />
+                  <span>Add Product</span>
+                </button>
+              </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">
-                Choose Laptop Unit <span className="required">*</span>
-              </label>
-              <select
-                className="form-control"
-                value={selectedLaptopId}
-                onChange={(e) => setSelectedLaptopId(e.target.value)}
-              >
-                <option value="">-- Select an Available Laptop Unit --</option>
-                {availableLaptops.map((l) => (
-                  <option key={l._id} value={l._id}>
-                    {l.brand} {l.model} (S/N: {l.serialNumber}) — {l.processor} / {l.ram} / {l.storage} — ₹{l.sellingPrice}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* List of Item Selectors */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {items.map((item, index) => {
+                const selectedIdsInOtherRows = items
+                  .filter((_, idx) => idx !== index)
+                  .map(it => it.laptopId)
+                  .filter(Boolean);
 
-            {selectedLaptop ? (
-              <div style={{
-                backgroundColor: "#f8fafc",
-                border: "1px solid #e2e8f0",
-                borderRadius: "10px",
-                padding: "16px",
-                marginTop: "12px"
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "10px" }}>
-                  <div>
-                    <h4 style={{ fontSize: "15px", fontWeight: 800, color: "#0f172a" }}>
-                      {selectedLaptop.brand} {selectedLaptop.model}
-                    </h4>
-                    <span style={{ 
-                      fontFamily: "var(--font-mono)", 
-                      fontSize: "12px", 
-                      fontWeight: 600, 
-                      color: "#334155",
-                      backgroundColor: "#e2e8f0",
-                      padding: "2px 6px",
-                      borderRadius: "4px"
-                    }}>
-                      S/N: {selectedLaptop.serialNumber}
-                    </span>
-                  </div>
-                  <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: "11px", color: "#64748b", textTransform: "uppercase" }}>Selling Price</div>
-                    <div style={{ fontSize: "18px", fontWeight: 800, color: "#2563eb" }}>
-                      {formatCurrency(selectedLaptop.sellingPrice)}
+                return (
+                  <div
+                    key={index}
+                    style={{
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "10px",
+                      padding: "16px",
+                      backgroundColor: item.laptop ? "#ffffff" : "#f8fafc"
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                      <span style={{ fontSize: "12.5px", fontWeight: 700, color: "#2563eb", textTransform: "uppercase" }}>
+                        Item {index + 1}
+                      </span>
+
+                      {items.length > 1 && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-secondary"
+                          style={{ color: "#ef4444", padding: "4px 8px", borderColor: "#fecaca" }}
+                          onClick={() => handleRemoveItem(index)}
+                          title="Remove this product"
+                        >
+                          <Trash2 size={13} />
+                          <span>Remove</span>
+                        </button>
+                      )}
                     </div>
-                  </div>
-                </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px", fontSize: "12.5px", color: "#475569" }}>
-                  <div><strong>CPU:</strong> {selectedLaptop.processor}</div>
-                  <div><strong>RAM:</strong> {selectedLaptop.ram}</div>
-                  <div><strong>Storage:</strong> {selectedLaptop.storage}</div>
-                  <div><strong>Condition:</strong> <StatusBadge status={selectedLaptop.condition} type="condition" /></div>
-                  <div><strong>Warranty:</strong> {selectedLaptop.warranty || "30 Days"}</div>
-                  <div><strong>Status:</strong> <StatusBadge status={selectedLaptop.status} /></div>
-                </div>
-              </div>
-            ) : (
-              <div style={{ textAlign: "center", padding: "20px", color: "#94a3b8", backgroundColor: "#f8fafc", borderRadius: "8px" }}>
-                Select a laptop from the dropdown above to display technical specifications and billing price.
-              </div>
-            )}
+                    <div className="form-group" style={{ marginBottom: item.laptop ? "12px" : 0 }}>
+                      <label className="form-label" style={{ fontSize: "12px" }}>
+                        Select Available Laptop <span className="required">*</span>
+                      </label>
+                      <select
+                        className="form-control"
+                        value={item.laptopId}
+                        onChange={(e) => handleSelectLaptop(index, e.target.value)}
+                      >
+                        <option value="">-- Choose a Laptop Unit --</option>
+                        {availableLaptops.map((l) => {
+                          const isAlreadyChosen = selectedIdsInOtherRows.includes(l._id);
+                          return (
+                            <option key={l._id} value={l._id} disabled={isAlreadyChosen}>
+                              {l.brand} {l.model} (S/N: {l.serialNumber}) — ₹{l.sellingPrice} {isAlreadyChosen ? "(Selected in another row)" : ""}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+
+                    {item.laptop && (
+                      <div style={{
+                        backgroundColor: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "8px",
+                        padding: "12px 14px",
+                        marginTop: "8px"
+                      }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                          <div>
+                            <h4 style={{ fontSize: "14px", fontWeight: 800, color: "#0f172a" }}>
+                              {item.laptop.brand} {item.laptop.model}
+                            </h4>
+                            <span style={{
+                              fontFamily: "var(--font-mono)",
+                              fontSize: "11.5px",
+                              fontWeight: 600,
+                              color: "#334155",
+                              backgroundColor: "#e2e8f0",
+                              padding: "2px 6px",
+                              borderRadius: "4px"
+                            }}>
+                              S/N: {item.laptop.serialNumber}
+                            </span>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontSize: "10.5px", color: "#64748b", textTransform: "uppercase" }}>Price</div>
+                            <div style={{ fontSize: "16px", fontWeight: 800, color: "#2563eb" }}>
+                              {formatCurrency(item.laptop.sellingPrice)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px", fontSize: "12px", color: "#475569" }}>
+                          <div><strong>CPU:</strong> {item.laptop.processor}</div>
+                          <div><strong>RAM:</strong> {item.laptop.ram}</div>
+                          <div><strong>Storage:</strong> {item.laptop.storage}</div>
+                          <div><strong>Condition:</strong> <StatusBadge status={item.laptop.condition} type="condition" /></div>
+                          <div><strong>Warranty:</strong> {item.laptop.warranty || "30 Days"}</div>
+                          <div><strong>Status:</strong> <StatusBadge status={item.laptop.status} /></div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: "16px", textAlign: "right" }}>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleAddItem}
+              >
+                <Plus size={14} />
+                <span>+ Add Another Laptop</span>
+              </button>
+            </div>
           </div>
 
-          {/* SECTION 5: WARRANTY DETAILS */}
+          {/* SECTION 3: WARRANTY DETAILS */}
           <div className="card">
             <div className="card-header" style={{ marginBottom: "12px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -575,8 +708,8 @@ export default function CreateBill() {
 
         {/* Right Column: Billing Calculation & Payment Settlement */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-          
-          {/* SECTION 3: BILL CALCULATION */}
+
+          {/* SECTION 4: BILL CALCULATION */}
           <div className="card" style={{ borderTop: "4px solid #2563eb" }}>
             <div className="card-header" style={{ marginBottom: "16px" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -586,16 +719,16 @@ export default function CreateBill() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Selling Price (₹)</label>
+              <label className="form-label">Subtotal ({selectedLaptops.length} {selectedLaptops.length === 1 ? "Item" : "Items"}) (₹)</label>
               <input
                 type="text"
                 className="form-control"
-                value={formatCurrency(sellingPrice)}
+                value={formatCurrency(subtotal)}
                 disabled
                 style={{ fontWeight: 700, fontSize: "15px", color: "#0f172a" }}
               />
               <small style={{ color: "#64748b", fontSize: "11px" }}>
-                Price automatically fetched from MongoDB.
+                Sum of locked selling prices for all selected products.
               </small>
             </div>
 
@@ -605,12 +738,12 @@ export default function CreateBill() {
                 <input
                   type="number"
                   min="0"
-                  max={sellingPrice}
+                  max={subtotal}
                   className="form-control"
                   placeholder="0"
                   value={discount}
                   onChange={(e) => handleDiscountChange(e.target.value)}
-                  disabled={!selectedLaptop}
+                  disabled={selectedLaptops.length === 0}
                 />
               </div>
 
@@ -623,7 +756,7 @@ export default function CreateBill() {
                   placeholder="0"
                   value={tax}
                   onChange={(e) => handleTaxChange(e.target.value)}
-                  disabled={!selectedLaptop}
+                  disabled={selectedLaptops.length === 0}
                 />
               </div>
             </div>
@@ -648,12 +781,12 @@ export default function CreateBill() {
                 fontWeight: 800,
                 color: "#0f172a"
               }}>
-                <span>Final Invoice Amount:</span>
+                <span>Grand Total:</span>
                 <span style={{ color: "#2563eb" }}>{formatCurrency(totalAmount)}</span>
               </div>
             </div>
 
-            {/* SECTION 4: PAYMENT */}
+            {/* SECTION 5: PAYMENT SETTLEMENT */}
             <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "16px", marginTop: "16px" }}>
               <h4 style={{ fontSize: "14px", fontWeight: 700, color: "#0f172a", marginBottom: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
                 <CreditCard size={16} />
@@ -661,18 +794,41 @@ export default function CreateBill() {
               </h4>
 
               <div className="form-group">
-                <label className="form-label">Payment Method</label>
+                <label className="form-label">Payment Method <span className="required">*</span></label>
                 <select
                   className="form-control"
                   value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value)}
+                  onChange={(e) => handlePaymentMethodChange(e.target.value)}
                 >
                   <option value="UPI">UPI (Google Pay / PhonePe / Paytm)</option>
                   <option value="CASH">Cash in Hand</option>
                   <option value="CARD">Credit / Debit Card</option>
-                  <option value="BANK_TRANSFER">Bank Transfer (NEFT / IMPS)</option>
+                  <option value="BANK_TRANSFER">Bank Transfer (NEFT / IMPS / RTGS)</option>
                 </select>
               </div>
+
+              {/* Transaction ID / UTR Number - Visible & Required for Online Payments */}
+              {isOnlinePayment && (
+                <div className="form-group" style={{ backgroundColor: "#eff6ff", border: "1px solid #bfdbfe", padding: "12px", borderRadius: "8px" }}>
+                  <label className="form-label" style={{ color: "#1e40af", fontWeight: 700 }}>
+                    Transaction ID / UTR Number <span className="required">*</span>
+                  </label>
+                  <div style={{ position: "relative" }}>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="e.g. UPI Ref / Bank UTR: 423589234892"
+                      value={transactionId}
+                      onChange={(e) => setTransactionId(e.target.value)}
+                      style={{ fontFamily: "var(--font-mono)", fontWeight: 600 }}
+                      required
+                    />
+                  </div>
+                  <small style={{ color: "#2563eb", fontSize: "11px", display: "block", marginTop: "4px" }}>
+                    Required for online settlement audit & tax invoice PDF generation.
+                  </small>
+                </div>
+              )}
 
               <div className="form-row">
                 <div className="form-group">
@@ -698,7 +854,7 @@ export default function CreateBill() {
                     placeholder="0"
                     value={amountPaid}
                     onChange={(e) => handleAmountPaidChange(e.target.value)}
-                    disabled={!selectedLaptop}
+                    disabled={selectedLaptops.length === 0}
                   />
                 </div>
               </div>
@@ -719,14 +875,40 @@ export default function CreateBill() {
               </div>
             </div>
 
+            {/* Authorized Signature Card Preview */}
+            <div style={{
+              marginTop: "18px",
+              padding: "12px 14px",
+              backgroundColor: "#f8fafc",
+              border: "1px dashed #cbd5e1",
+              borderRadius: "8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between"
+            }}>
+              <div>
+                <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase" }}>
+                  Authorized E-Signature
+                </div>
+                <div style={{ fontSize: "11.5px", color: "#334155", fontWeight: 600 }}>
+                  Laptop_Guy Laptops & Computers
+                </div>
+              </div>
+              <img
+                src={sigImg}
+                alt="Signature"
+                style={{ maxHeight: "36px", maxWidth: "100px", objectFit: "contain" }}
+              />
+            </div>
+
             {/* Submit Action Buttons */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "24px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "20px" }}>
               <button
                 type="button"
                 className="btn btn-secondary btn-lg"
                 style={{ justifyContent: "center" }}
                 onClick={handleOpenPreview}
-                disabled={!selectedLaptop || submitting}
+                disabled={selectedLaptops.length === 0 || submitting}
               >
                 <Eye size={16} />
                 <span>Preview Invoice</span>
@@ -737,7 +919,7 @@ export default function CreateBill() {
                 className="btn btn-primary btn-lg"
                 style={{ justifyContent: "center", backgroundColor: "#2563eb" }}
                 onClick={handleGenerateBill}
-                disabled={!selectedLaptop || submitting}
+                disabled={selectedLaptops.length === 0 || submitting}
               >
                 <ReceiptText size={18} />
                 <span>{submitting ? "Processing & Generating PDF..." : "Generate Official Bill"}</span>
@@ -753,20 +935,24 @@ export default function CreateBill() {
         isOpen={previewOpen}
         onClose={() => setPreviewOpen(false)}
         customerData={resolvedCustomerData}
-        laptopData={selectedLaptop}
+        items={items.filter(it => it.laptop)}
         billingData={{
+          subtotal,
           discount: numDiscount,
           tax: numTax,
+          totalAmount,
           paymentMethod,
+          transactionId: isOnlinePayment ? transactionId.trim() : "",
           paymentStatus,
           amountPaid: numAmountPaid,
+          balance,
           warranty: warrantyOverride
         }}
         onConfirm={handleGenerateBill}
         isGenerating={submitting}
       />
 
-      {/* Invoice Success Modal with PDF Download */}
+      {/* Invoice Success Modal with PDF Download & Send Email */}
       <InvoiceSuccessModal
         isOpen={successModalOpen}
         onClose={() => setSuccessModalOpen(false)}

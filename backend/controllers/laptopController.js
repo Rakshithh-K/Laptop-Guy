@@ -141,7 +141,9 @@ const updateLaptop = async (req, res, next) => {
 
         // If laptop is SOLD, prevent changing status back to AVAILABLE without caution
         if (laptop.status === "SOLD" && req.body.status === "AVAILABLE") {
-            const hasInvoice = await Invoice.findOne({ laptop: laptop._id });
+            const hasInvoice = await Invoice.findOne({
+                $or: [{ laptop: laptop._id }, { "items.laptop": laptop._id }]
+            });
             if (hasInvoice) {
                 return res.status(400).json({
                     success: false,
@@ -195,7 +197,9 @@ const deleteLaptop = async (req, res, next) => {
         }
 
         // Prevent deletion if an invoice exists
-        const linkedInvoice = await Invoice.findOne({ laptop: laptop._id });
+        const linkedInvoice = await Invoice.findOne({
+            $or: [{ laptop: laptop._id }, { "items.laptop": laptop._id }]
+        });
         if (linkedInvoice) {
             return res.status(400).json({
                 success: false,

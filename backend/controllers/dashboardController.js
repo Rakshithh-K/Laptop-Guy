@@ -41,6 +41,7 @@ const getDashboardStats = async (req, res, next) => {
         // 5 most recent invoices
         const recentInvoices = await Invoice.find()
             .populate("customer")
+            .populate("items.laptop")
             .populate("laptop")
             .sort({ createdAt: -1 })
             .limit(5);

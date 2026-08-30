@@ -2,68 +2,173 @@ const nodemailer = require("nodemailer");
 const businessConfig = require("../config/businessConfig");
 
 /**
- * Creates Nodemailer Transporter for Gmail SMTP
- */
-const createTransporter = () => {
-    const user = process.env.GMAIL_USER;
-    const pass = process.env.GMAIL_APP_PASSWORD ? process.env.GMAIL_APP_PASSWORD.replace(/\s+/g, "") : "";
-
-    if (!user || !pass) {
-        throw new Error("Gmail credentials (GMAIL_USER or GMAIL_APP_PASSWORD) not configured in backend .env");
-    }
-
-    return nodemailer.createTransport({
-        service: "gmail",
-        host: "smtp.gmail.com",
-        port: 465,
-        secure: true,
-        auth: {
-            user: user.trim(),
-            pass: pass.trim()
-        }
-    });
-};
-
-/**
  * Format currency in Indian format
  */
 const formatCurrency = (amount) => {
-    return new Intl.NumberFormat("en-IN", {
-        style: "currency",
-        currency: "INR",
-        maximumFractionDigits: 0
-    }).format(amount || 0);
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0
+  }).format(amount || 0);
 };
 
 /**
  * Format date
  */
 const formatDate = (dateString) => {
-    if (!dateString) return new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-    return new Date(dateString).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  if (!dateString) return new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  return new Date(dateString).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+};
+
+/**
+ * Creates Nodemailer Transporter with connection timeouts
+ */
+const createTransporter = () => {
+  const user = process.env.GMAIL_USER || process.env.SMTP_USER;
+  const pass = process.env.GMAIL_APP_PASSWORD
+    ? process.env.GMAIL_APP_PASSWORD.replace(/\s+/g, "")
+    : process.env.SMTP_PASS;
+
+  if (!user || !pass) {
+    throw new Error("Email credentials not configured. Please set RESEND_API_KEY, BREVO_API_KEY, or GMAIL_USER / GMAIL_APP_PASSWORD in environment variables.");
+  }
+
+  const host = process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = Number(process.env.SMTP_PORT) || 465;
+  const secure = port === 465;
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: {
+      user: user.trim(),
+      pass: pass.trim()
+    },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000
+  });
+};
+
+/**
+ * Send email via Resend HTTPS API (Works 100% on Render Free tier without SMTP port blocks)
+ */
+const sendViaResend = async ({ to, subject, html, text, filename, pdfBuffer, businessName, senderEmail }) => {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromAddress = process.env.EMAIL_FROM || `${businessName} <onboarding@resend.dev>`;
+
+  const payload = {
+    from: fromAddress,
+    to: [to],
+    subject,
+    html,
+    text,
+    attachments: [
+      {
+        filename,
+        content: pdfBuffer.toString("base64")
+      }
+    ]
+  };
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || data.error || `Resend API error (${response.status})`);
+  }
+  return data;
+};
+
+/**
+ * Send email via Brevo / Sendinblue HTTPS API
+ */
+const sendViaBrevo = async ({ to, customerName, subject, html, text, filename, pdfBuffer, businessName }) => {
+  const apiKey = process.env.BREVO_API_KEY;
+  const senderEmail = process.env.EMAIL_FROM || process.env.GMAIL_USER || "billing@nextgenlaptops.com";
+
+  const payload = {
+    sender: { name: businessName, email: senderEmail },
+    to: [{ email: to, name: customerName || "Customer" }],
+    subject,
+    htmlContent: html,
+    textContent: text,
+    attachment: [
+      {
+        name: filename,
+        content: pdfBuffer.toString("base64")
+      }
+    ]
+  };
+
+  const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": apiKey,
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.message || `Brevo API error (${response.status})`);
+  }
+  return data;
 };
 
 /**
  * Sends Invoice Email with PDF Attachment
  */
 const sendInvoiceEmail = async ({ to, customerName, invoiceNumber, invoice, pdfBuffer }) => {
-    const laptop = invoice.laptop || {};
-    const businessName = businessConfig.businessName || "Laptop_Guy Laptops & Computers";
-    const businessPhone = businessConfig.phone || "+91 98765 43210";
-    const businessEmail = businessConfig.email || "billing@nextgenlaptops.com";
-    const invoiceDate = formatDate(invoice.createdAt);
-    const totalAmount = formatCurrency(invoice.totalAmount);
-    const paymentStatus = invoice.paymentStatus || "PAID";
-    const warranty = invoice.warranty || laptop.warranty || "30 Days Hardware Warranty";
+  console.log(`[EmailService] Starting invoice email for ${invoiceNumber} to ${to}`);
 
-    console.log(`[EmailService] Invoice email sending started for ${invoiceNumber} to ${to}`);
+  if (pdfBuffer) {
+    console.log(`[EmailService] PDF generated (Size: ${pdfBuffer.length} bytes)`);
+  }
 
-    const transporter = createTransporter();
+  const businessName = businessConfig.businessName || "Laptop_Guy Laptops & Computers";
+  const businessPhone = businessConfig.phone || "+91 98765 43210";
+  const businessEmail = businessConfig.email || "billing@nextgenlaptops.com";
+  const invoiceDate = formatDate(invoice.createdAt);
+  const totalAmount = formatCurrency(invoice.totalAmount);
+  const paymentStatus = invoice.paymentStatus || "PAID";
+  const warranty = invoice.warranty || "30 Days Hardware Warranty";
+  const transactionId = invoice.transactionId ? invoice.transactionId.trim() : "";
 
-    // Verify SMTP connection
-    await transporter.verify();
+  // Normalize items array
+  const items = (invoice.items && invoice.items.length > 0)
+    ? invoice.items
+    : (invoice.laptop ? [{ laptop: invoice.laptop, sellingPrice: invoice.sellingPrice || invoice.totalAmount }] : []);
 
-    const emailHtml = `
+  const itemsHtml = items.map((item, idx) => {
+    const l = item.laptop || {};
+    const price = item.sellingPrice !== undefined ? item.sellingPrice : (l.sellingPrice || 0);
+    return `
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">
+              ${idx + 1}. ${l.brand || ""} ${l.model || "Laptop"}
+              <div style="font-size: 11.5px; color: #64748b; font-family: monospace;">
+                S/N: ${l.serialNumber || "N/A"} | ${l.processor || ""} | ${l.ram || ""} | ${l.storage || ""}
+              </div>
+            </td>
+            <td style="padding: 8px 0; text-align: right; font-weight: 700; color: #0f172a; vertical-align: top;">
+              ${formatCurrency(price)}
+            </td>
+          </tr>
+        `;
+  }).join("");
+
+  const emailHtml = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -78,11 +183,6 @@ const sendInvoiceEmail = async ({ to, customerName, invoiceNumber, invoice, pdfB
   .greeting { font-size: 16px; font-weight: 600; color: #0f172a; margin-bottom: 12px; }
   .intro { font-size: 14px; color: #475569; margin-bottom: 24px; }
   .summary-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 20px; margin-bottom: 24px; }
-  .summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13.5px; border-bottom: 1px dashed #e2e8f0; }
-  .summary-row:last-child { border-bottom: none; }
-  .summary-label { color: #64748b; font-weight: 500; }
-  .summary-val { color: #0f172a; font-weight: 700; text-align: right; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11.5px; font-weight: 700; background: #ecfdf5; color: #059669; }
   .footer { background: #f1f5f9; padding: 20px 32px; border-top: 1px solid #e2e8f0; font-size: 12px; color: #64748b; }
   .footer strong { color: #1e293b; }
 </style>
@@ -99,7 +199,7 @@ const sendInvoiceEmail = async ({ to, customerName, invoiceNumber, invoice, pdfB
       <p class="intro">Thank you for your purchase. Please find your official tax invoice attached as a PDF for your records.</p>
       
       <div class="summary-card">
-        <table style="width: 100%; border-collapse: collapse; font-size: 13.5px;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 13.5px; margin-bottom: 12px;">
           <tr>
             <td style="padding: 6px 0; color: #64748b;">Invoice Number:</td>
             <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0f172a; font-family: monospace;">${invoiceNumber}</td>
@@ -109,26 +209,37 @@ const sendInvoiceEmail = async ({ to, customerName, invoiceNumber, invoice, pdfB
             <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">${invoiceDate}</td>
           </tr>
           <tr>
-            <td style="padding: 6px 0; color: #64748b;">Laptop Unit:</td>
-            <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0f172a;">${laptop.brand || ""} ${laptop.model || "Certified Laptop"}</td>
+            <td style="padding: 6px 0; color: #64748b;">Payment Method:</td>
+            <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #0f172a;">${invoice.paymentMethod || "CASH"}</td>
           </tr>
+          ${transactionId ? `
           <tr>
-            <td style="padding: 6px 0; color: #64748b;">Serial Number:</td>
-            <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #334155; font-family: monospace;">${laptop.serialNumber || "N/A"}</td>
+            <td style="padding: 6px 0; color: #64748b;">Transaction ID / UTR:</td>
+            <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #0f172a; font-family: monospace;">${transactionId}</td>
           </tr>
-          <tr>
-            <td style="padding: 6px 0; color: #64748b;">Warranty:</td>
-            <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #2563eb;">${warranty}</td>
-          </tr>
+          ` : ""}
           <tr>
             <td style="padding: 6px 0; color: #64748b;">Payment Status:</td>
             <td style="padding: 6px 0; text-align: right; font-weight: 700; color: #059669;">${paymentStatus}</td>
           </tr>
-          <tr style="border-top: 2px solid #0f172a;">
-            <td style="padding: 10px 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">Total Amount:</td>
-            <td style="padding: 10px 0 4px 0; text-align: right; font-weight: 800; color: #2563eb; font-size: 16px;">${totalAmount}</td>
+          <tr>
+            <td style="padding: 6px 0; color: #64748b;">Warranty Coverage:</td>
+            <td style="padding: 6px 0; text-align: right; font-weight: 600; color: #2563eb;">${warranty}</td>
           </tr>
         </table>
+
+        <div style="border-top: 1px solid #e2e8f0; padding-top: 10px; margin-top: 10px;">
+          <div style="font-size: 11.5px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 6px;">
+            Purchased Products (${items.length})
+          </div>
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            ${itemsHtml}
+            <tr style="border-top: 2px solid #0f172a;">
+              <td style="padding: 10px 0 4px 0; font-weight: 700; color: #0f172a; font-size: 15px;">Grand Total:</td>
+              <td style="padding: 10px 0 4px 0; text-align: right; font-weight: 800; color: #2563eb; font-size: 16px;">${totalAmount}</td>
+            </tr>
+          </table>
+        </div>
       </div>
 
       <p style="font-size: 13px; color: #64748b; margin-top: 16px;">
@@ -145,18 +256,27 @@ const sendInvoiceEmail = async ({ to, customerName, invoiceNumber, invoice, pdfB
 </html>
     `;
 
-    const plainText = `
+  const itemsText = items.map((item, idx) => {
+    const l = item.laptop || {};
+    const price = item.sellingPrice !== undefined ? item.sellingPrice : (l.sellingPrice || 0);
+    return `Item ${idx + 1}: ${l.brand || ""} ${l.model || "Laptop"} | S/N: ${l.serialNumber || "N/A"} | Price: ${formatCurrency(price)}`;
+  }).join("\n");
+
+  const plainText = `
 Hello ${customerName || "Customer"},
 
 Thank you for your purchase. Please find your invoice attached.
 
 Invoice Number: ${invoiceNumber}
 Invoice Date: ${invoiceDate}
-Laptop: ${laptop.brand || ""} ${laptop.model || ""}
-Serial Number: ${laptop.serialNumber || "N/A"}
-Total Amount: ${totalAmount}
-Payment Status: ${paymentStatus}
+Payment Method: ${invoice.paymentMethod || "CASH"}
+${transactionId ? `Transaction ID / UTR: ${transactionId}\n` : ""}Payment Status: ${paymentStatus}
 Warranty: ${warranty}
+
+Products:
+${itemsText}
+
+Grand Total: ${totalAmount}
 
 Thank you,
 ${businessName}
@@ -164,26 +284,68 @@ ${businessPhone}
 ${businessEmail}
     `.trim();
 
-    const mailOptions = {
-        from: `"${businessName}" <${process.env.GMAIL_USER}>`,
-        to: to.trim(),
-        subject: `Invoice ${invoiceNumber} from ${businessName}`,
-        text: plainText,
-        html: emailHtml,
-        attachments: [
-            {
-                filename: `Invoice-${invoiceNumber}.pdf`,
-                content: pdfBuffer,
-                contentType: "application/pdf"
-            }
-        ]
-    };
+  const subject = `Invoice ${invoiceNumber} from ${businessName}`;
+  const filename = `Invoice-${invoiceNumber}.pdf`;
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`[EmailService] Invoice email sent successfully to ${to}. MessageId: ${info.messageId}`);
-    return info;
+  console.log(`[EmailService] Sending email to ${to}...`);
+
+  // 1. If RESEND_API_KEY is configured, use Resend HTTPS API (ideal for Render production)
+  if (process.env.RESEND_API_KEY) {
+    console.log(`[EmailService] Delivering via Resend HTTPS API...`);
+    const result = await sendViaResend({
+      to: to.trim(),
+      subject,
+      html: emailHtml,
+      text: plainText,
+      filename,
+      pdfBuffer,
+      businessName,
+      senderEmail: process.env.GMAIL_USER || businessEmail
+    });
+    console.log(`[EmailService] Email sent successfully via Resend API to ${to}. ID: ${result.id || "OK"}`);
+    return result;
+  }
+
+  // 2. If BREVO_API_KEY is configured, use Brevo HTTPS API
+  if (process.env.BREVO_API_KEY) {
+    console.log(`[EmailService] Delivering via Brevo HTTPS API...`);
+    const result = await sendViaBrevo({
+      to: to.trim(),
+      customerName,
+      subject,
+      html: emailHtml,
+      text: plainText,
+      filename,
+      pdfBuffer,
+      businessName
+    });
+    console.log(`[EmailService] Email sent successfully via Brevo API to ${to}. ID: ${result.messageId || "OK"}`);
+    return result;
+  }
+
+  // 3. Fallback to Nodemailer SMTP
+  console.log(`[EmailService] Delivering via SMTP Transport...`);
+  const transporter = createTransporter();
+  const mailOptions = {
+    from: `"${businessName}" <${process.env.GMAIL_USER || process.env.SMTP_USER}>`,
+    to: to.trim(),
+    subject,
+    text: plainText,
+    html: emailHtml,
+    attachments: [
+      {
+        filename,
+        content: pdfBuffer,
+        contentType: "application/pdf"
+      }
+    ]
+  };
+
+  const info = await transporter.sendMail(mailOptions);
+  console.log(`[EmailService] Email sent successfully to ${to}. MessageId: ${info.messageId}`);
+  return info;
 };
 
 module.exports = {
-    sendInvoiceEmail
+  sendInvoiceEmail
 };

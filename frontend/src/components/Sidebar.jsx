@@ -11,6 +11,7 @@ import {
   UserCheck
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import logoImg from "../assets/logo.jpeg";
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -34,8 +35,12 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-header">
-        <div className="sidebar-logo">
-          <Laptop size={22} color="#ffffff" />
+        <div className="sidebar-logo" style={{ overflow: "hidden", padding: 0 }}>
+          <img 
+            src={logoImg} 
+            alt="Laptop Guy Logo" 
+            style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }} 
+          />
         </div>
         <div>
           <div className="sidebar-brand-name">LAPTOP_GUY</div>

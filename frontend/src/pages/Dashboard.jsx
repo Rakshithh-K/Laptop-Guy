@@ -250,12 +250,34 @@ export default function Dashboard() {
                         </div>
                       </td>
                       <td>
-                        <div style={{ fontWeight: 600 }}>
-                          {inv.laptop ? `${inv.laptop.brand} ${inv.laptop.model}` : "Laptop Record"}
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#64748b", fontFamily: "var(--font-mono)" }}>
-                          S/N: {inv.laptop?.serialNumber || "N/A"}
-                        </div>
+                        {(() => {
+                          const items = (inv.items && inv.items.length > 0)
+                            ? inv.items
+                            : (inv.laptop ? [{ laptop: inv.laptop }] : []);
+                          if (items.length > 1) {
+                            return (
+                              <div>
+                                <div style={{ fontWeight: 700, color: "#2563eb", fontSize: "12.5px" }}>
+                                  {items.length} Products
+                                </div>
+                                <div style={{ fontSize: "11px", color: "#64748b" }}>
+                                  {items.map(it => `${it.laptop?.brand || ""} ${it.laptop?.model || ""}`.trim()).filter(Boolean).join(", ")}
+                                </div>
+                              </div>
+                            );
+                          }
+                          const l = items[0]?.laptop || inv.laptop;
+                          return (
+                            <div>
+                              <div style={{ fontWeight: 600 }}>
+                                {l ? `${l.brand} ${l.model}` : "Laptop Record"}
+                              </div>
+                              <div style={{ fontSize: "11px", color: "#64748b", fontFamily: "var(--font-mono)" }}>
+                                S/N: {l?.serialNumber || "N/A"}
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td style={{ fontWeight: 700 }}>
                         {formatCurrency(inv.totalAmount)}

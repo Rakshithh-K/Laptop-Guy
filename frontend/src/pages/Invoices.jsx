@@ -279,12 +279,37 @@ export default function Invoices() {
                       </div>
                     </td>
                     <td>
-                      <div style={{ fontWeight: 600 }}>
-                        {inv.laptop ? `${inv.laptop.brand} ${inv.laptop.model}` : "Laptop Record"}
-                      </div>
-                      <div style={{ fontSize: "11px", color: "#64748b", fontFamily: "var(--font-mono)" }}>
-                        S/N: {inv.laptop?.serialNumber || "N/A"}
-                      </div>
+                      {(() => {
+                        const items = (inv.items && inv.items.length > 0)
+                          ? inv.items
+                          : (inv.laptop ? [{ laptop: inv.laptop }] : []);
+                        
+                        if (items.length > 1) {
+                          const names = items.map(it => `${it.laptop?.brand || ""} ${it.laptop?.model || ""}`.trim()).filter(Boolean).join(", ");
+                          return (
+                            <div>
+                              <div style={{ fontWeight: 700, color: "#2563eb", fontSize: "12.5px" }}>
+                                {items.length} Products
+                              </div>
+                              <div style={{ fontSize: "11px", color: "#475569", maxWidth: "200px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={names}>
+                                {names}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        const singleLaptop = items[0]?.laptop || inv.laptop;
+                        return (
+                          <div>
+                            <div style={{ fontWeight: 600 }}>
+                              {singleLaptop ? `${singleLaptop.brand} ${singleLaptop.model}` : "Laptop Record"}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#64748b", fontFamily: "var(--font-mono)" }}>
+                              S/N: {singleLaptop?.serialNumber || "N/A"}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td>
                       <div style={{ fontWeight: 800, color: "#0f172a", fontSize: "14px" }}>
