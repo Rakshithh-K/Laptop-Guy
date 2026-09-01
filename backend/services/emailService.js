@@ -38,27 +38,29 @@ const formatDate = (dateString) => {
 };
 
 /**
- * Creates Nodemailer Transporter using Gmail SMTP on port 587 with STARTTLS and forced IPv4
+ * Creates Nodemailer Transporter using environment variable configuration
+ * Compatible with Brevo SMTP (smtp-relay.brevo.com:587), SendGrid, Postmark, Mailgun, or Gmail STARTTLS
  */
 const createTransporter = () => {
-  const user = (process.env.GMAIL_USER || process.env.SMTP_USER || "").trim();
-  const pass = (process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || "").replace(/\s+/g, "");
+  const host = (process.env.SMTP_HOST || "smtp.gmail.com").trim();
+  const port = Number(process.env.SMTP_PORT) || 587;
+  const isSecure = process.env.SMTP_SECURE === "true" || port === 465;
+
+  const user = (process.env.SMTP_USER || process.env.GMAIL_USER || "").trim();
+  const pass = (process.env.SMTP_PASS || process.env.GMAIL_APP_PASSWORD || "").replace(/\s+/g, "");
 
   if (!user || !pass) {
-    throw new Error("Gmail credentials not configured. Please set GMAIL_USER and GMAIL_APP_PASSWORD in environment variables.");
+    throw new Error(
+      "SMTP credentials not configured. Please set SMTP_USER and SMTP_PASS (or GMAIL_USER and GMAIL_APP_PASSWORD) in your Render Dashboard Environment Variables."
+    );
   }
 
-  const host = process.env.SMTP_HOST || "smtp.gmail.com";
-  const port = Number(process.env.SMTP_PORT) || 587;
-  const secure = port === 465; // false for port 587 (STARTTLS)
+  console.log(`[EmailService] Creating SMTP transporter (${host}:${port}, secure: ${isSecure}, requireTLS: ${!isSecure}, family: 4)`);
 
-  console.log(`[EmailService] Creating Gmail SMTP transporter (${host}:${port}, secure: ${secure}, requireTLS: true, IPv4)`);
-
-  return nodemailer.createTransport({
+  const transportConfig = {
     host,
     port,
-    secure,
-    requireTLS: true,
+    secure: isSecure,
     family: 4, // Force IPv4 to prevent unreachable IPv6 socket connection
     auth: {
       user,
@@ -67,26 +69,46 @@ const createTransporter = () => {
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 20000
-  });
+  };
+
+  // If using port 587 or non-SSL port, require STARTTLS encryption
+  if (!isSecure) {
+    transportConfig.requireTLS = true;
+  }
+
+  return nodemailer.createTransport(transportConfig);
 };
 
 /**
- * Main Entry Point: Sends Invoice Email with Signed PDF Attachment via Gmail SMTP
+ * Main Entry Point: Validates PDF Buffer, Verifies SMTP, and Sends Invoice Email
  */
 const sendInvoiceEmail = async ({ to, customerName, invoiceNumber, invoice, pdfBuffer }) => {
   console.log(`[EmailService] Starting invoice email for invoice #${invoiceNumber} to ${to}`);
 
+  // 1. Validate Customer Email
   if (!to || !to.trim()) {
     throw new Error("Customer email address is required to send invoice.");
   }
 
+  // 2. Validate PDF Buffer
   if (!pdfBuffer || pdfBuffer.length === 0) {
-    throw new Error("PDF buffer is empty or invalid. Cannot send invoice email without attached PDF.");
+    throw new Error("PDF buffer is empty or missing. Cannot send invoice email without attached PDF.");
   }
 
-  const normalizedBuffer = Buffer.isBuffer(pdfBuffer) ? pdfBuffer : Buffer.from(pdfBuffer);
+  const validBuffer = Buffer.isBuffer(pdfBuffer) ? pdfBuffer : Buffer.from(pdfBuffer);
 
-  console.log(`[EmailService] PDF attachment ready (${normalizedBuffer.length} bytes)`);
+  if (validBuffer.length === 0) {
+    throw new Error("PDF buffer is 0 bytes. Invalid PDF data.");
+  }
+
+  const pdfHeader = validBuffer.subarray(0, 5).toString();
+  if (pdfHeader !== "%PDF-") {
+    throw new Error(`Invalid PDF header detected: "${pdfHeader}". Expected "%PDF-".`);
+  }
+
+  console.log(`[EmailService] PDF attachment ready`);
+  console.log(`[EmailService] PDF size: ${validBuffer.length} bytes`);
+  console.log(`[EmailService] PDF header: ${pdfHeader}`);
 
   const businessName = businessConfig.businessName || "Laptop_Guy Laptops & Computers";
   const businessPhone = businessConfig.phone || "+91 7795330943";
@@ -242,23 +264,24 @@ ${businessEmail}
   const subject = `Invoice ${invoiceNumber} from ${businessName}`;
   const filename = `Invoice-${invoiceNumber}.pdf`;
 
-  // 1. Create transporter
+  // 3. Create SMTP Transporter
   const transporter = createTransporter();
 
-  // 2. Verify connection
-  console.log(`[EmailService] Verifying Gmail SMTP connection...`);
+  // 4. Verify SMTP Connection
+  console.log(`[EmailService] Verifying SMTP connection...`);
   try {
     await transporter.verify();
-    console.log(`[EmailService] Gmail SMTP connection verified successfully`);
+    console.log(`[EmailService] SMTP connection verified`);
   } catch (verifyErr) {
-    console.error(`[EmailService] Gmail SMTP verification failed:`, verifyErr.message);
-    throw new Error(`Gmail SMTP connection verification failed: ${verifyErr.message}`);
+    console.error(`[EmailService] SMTP verification failed:`, verifyErr.message);
+    throw new Error(`SMTP verification failed: ${verifyErr.message}`);
   }
 
-  // 3. Mail options with direct PDF buffer
-  const senderEmail = (process.env.GMAIL_USER || process.env.SMTP_USER || "laptopguysales@gmail.com").trim();
+  // 5. Build Mail Options with Native Buffer Attachment
+  const fromAddress = (process.env.EMAIL_FROM || `"${businessName}" <${process.env.SMTP_USER || process.env.GMAIL_USER || businessEmail}>`).trim();
+
   const mailOptions = {
-    from: `"${businessName}" <${senderEmail}>`,
+    from: fromAddress,
     to: to.trim(),
     subject,
     text: plainText,
@@ -266,13 +289,13 @@ ${businessEmail}
     attachments: [
       {
         filename,
-        content: normalizedBuffer,
+        content: validBuffer,
         contentType: "application/pdf"
       }
     ]
   };
 
-  // 4. Send email
+  // 6. Send Invoice Email
   console.log(`[EmailService] Sending invoice email to ${to}...`);
   const info = await transporter.sendMail(mailOptions);
   console.log(`[EmailService] Invoice email sent successfully to ${to}. MessageId: ${info.messageId}`);
