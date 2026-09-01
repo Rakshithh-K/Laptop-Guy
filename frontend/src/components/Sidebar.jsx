@@ -2,6 +2,8 @@ import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
+  TrendingUp,
+  Wallet,
   Laptop,
   ReceiptText,
   FileSpreadsheet,
@@ -19,6 +21,8 @@ export default function Sidebar() {
 
   const navItems = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { to: "/profit", label: "Profit Analytics", icon: TrendingUp },
+    { to: "/investment", label: "Investment", icon: Wallet },
     { to: "/inventory", label: "Inventory", icon: Laptop },
     { to: "/create-bill", label: "Create Bill", icon: ReceiptText },
     { to: "/invoices", label: "Invoices", icon: FileSpreadsheet },

@@ -6,6 +6,8 @@ import Sidebar from "./components/Sidebar";
 import Topbar from "./components/Topbar";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import Profit from "./pages/Profit";
+import Investment from "./pages/Investment";
 import Inventory from "./pages/Inventory";
 import CreateBill from "./pages/CreateBill";
 import Invoices from "./pages/Invoices";
@@ -45,6 +47,28 @@ export default function App() {
               <ProtectedRoute>
                 <AppLayout>
                   <Dashboard />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/profit"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Profit />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/investment"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Investment />
                 </AppLayout>
               </ProtectedRoute>
             }

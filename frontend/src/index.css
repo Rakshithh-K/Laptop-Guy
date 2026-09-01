@@ -302,6 +302,24 @@ body {
   box-shadow: var(--shadow-md);
 }
 
+.stat-card-clickable {
+  cursor: pointer;
+  border-color: #cbd5e1;
+  position: relative;
+  user-select: none;
+}
+
+.stat-card-clickable:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+  border-color: #93c5fd;
+}
+
+.stat-card-clickable:active {
+  transform: translateY(-1px);
+}
+
+
 .stat-label {
   font-size: 12.5px;
   font-weight: 600;

@@ -5,6 +5,16 @@ export const getDashboardStats = async () => {
     return response.data;
 };
 
+export const getProfitAnalytics = async () => {
+    const response = await apiClient.get("/dashboard/profit");
+    return response.data;
+};
+
+export const getInvestmentAnalytics = async () => {
+    const response = await apiClient.get("/dashboard/investment");
+    return response.data;
+};
+
 export const getBusinessInfo = async () => {
     const response = await apiClient.get("/business-info");
     return response.data;

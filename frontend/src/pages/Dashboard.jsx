@@ -11,10 +11,11 @@ import {
   ReceiptText, 
   UserPlus, 
   Download, 
-  Eye,
-  Layers,
-  AlertCircle,
-  RefreshCw
+  Eye, 
+  Layers, 
+  AlertCircle, 
+  RefreshCw,
+  Wallet
 } from "lucide-react";
 import StatCard from "../components/StatCard";
 import StatusBadge from "../components/StatusBadge";
@@ -177,8 +178,30 @@ export default function Dashboard() {
           value={formatCurrency(metrics.totalSales)}
           sub="Gross billed revenue"
           icon={IndianRupee}
+          iconBg="#eff6ff"
+          iconColor="#2563eb"
+        />
+
+        <StatCard
+          title="Profit"
+          value={formatCurrency(metrics.totalProfit || 0)}
+          sub="Click for monthly analytics →"
+          badge="Analytics"
+          icon={TrendingUp}
           iconBg="#ecfdf5"
           iconColor="#059669"
+          onClick={() => navigate("/profit")}
+        />
+
+        <StatCard
+          title="Total Investment"
+          value={formatCurrency(metrics.stockPurchaseValue || 0)}
+          sub={`${metrics.availableLaptops || 0} Units in Stock · View Analytics →`}
+          badge="Cost"
+          icon={Wallet}
+          iconBg="#fffbeb"
+          iconColor="#d97706"
+          onClick={() => navigate("/investment")}
         />
 
         <StatCard

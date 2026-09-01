@@ -231,7 +231,7 @@ export default function InvoiceDetails() {
             </div>
 
             <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.4 }}>
-              {businessInfo?.address || "#667, Kumbarageri 3rd cross, C H Mohalla, Mysore - 57004"}<br />
+              {businessInfo?.address || "#667, Kumbarageri 3rd cross, C H Mohalla, Mysore - 570004"}<br />
               <strong>Phone:</strong> {businessInfo?.phone || "+91 7795330943 / +91 80 2345 6789"} | <strong>Email:</strong> {businessInfo?.email || "billing@nextgenlaptops.com"}<br />
               {businessInfo?.gstin && <span><strong>GSTIN:</strong> {businessInfo.gstin}</span>}
             </div>
