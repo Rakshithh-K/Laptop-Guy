@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Calendar, Store, LogOut, ShieldCheck } from "lucide-react";
+import { Calendar, Store, LogOut, Menu } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
-export default function Topbar() {
+export default function Topbar({ onToggleSidebar }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logoutAdmin } = useAuth();
@@ -29,6 +29,8 @@ export default function Topbar() {
   const getPageTitle = () => {
     const path = location.pathname;
     if (path.startsWith("/dashboard")) return "Business Dashboard";
+    if (path.startsWith("/profit")) return "Profit Analytics";
+    if (path.startsWith("/investment")) return "Investment Analytics";
     if (path.startsWith("/inventory")) return "Laptop Inventory Management";
     if (path.startsWith("/create-bill")) return "Create New Customer Bill";
     if (path.startsWith("/invoices/")) return "Invoice Overview";
@@ -47,18 +49,28 @@ export default function Topbar() {
   return (
     <header className="topbar">
       <div className="topbar-left">
+        {/* Hamburger Menu button visible on mobile */}
+        <button
+          type="button"
+          className="topbar-menu-btn"
+          onClick={onToggleSidebar}
+          aria-label="Open navigation menu"
+        >
+          <Menu size={22} />
+        </button>
+
         <h1 className="topbar-title">{getPageTitle()}</h1>
       </div>
 
       <div className="topbar-right">
-        <div className="date-badge">
+        <div className="date-badge topbar-hide-mobile">
           <Calendar size={14} />
           <span>{currentDate}</span>
         </div>
 
-        <div className="store-badge">
+        <div className="store-badge topbar-hide-mobile">
           <Store size={15} />
-          <span>Laptop Guy (Main Branch)</span>
+          <span>Laptop Guy (Main)</span>
         </div>
 
         {user && (
@@ -70,7 +82,7 @@ export default function Topbar() {
             style={{ color: "#ef4444", borderColor: "#fecaca" }}
           >
             <LogOut size={14} />
-            <span>Sign Out</span>
+            <span className="topbar-signout-text">Sign Out</span>
           </button>
         )}
       </div>

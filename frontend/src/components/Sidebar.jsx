@@ -10,12 +10,12 @@ import {
   Users,
   ShieldCheck,
   LogOut,
-  UserCheck
+  X
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import logoImg from "../assets/logo.jpeg";
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen = false, onClose }) {
   const navigate = useNavigate();
   const { user, logoutAdmin } = useAuth();
 
@@ -32,117 +32,148 @@ export default function Sidebar() {
   const handleLogout = async () => {
     const confirmed = window.confirm("Are you sure you want to sign out?");
     if (!confirmed) return;
+    if (onClose) onClose();
     await logoutAdmin();
     navigate("/login", { replace: true });
   };
 
+  const handleNavClick = () => {
+    if (onClose) {
+      onClose();
+    }
+  };
+
   return (
-    <aside className="sidebar">
-      <div className="sidebar-header">
-        <div className="sidebar-logo" style={{ overflow: "hidden", padding: 0 }}>
-          <img 
-            src={logoImg} 
-            alt="Laptop Guy Logo" 
-            style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }} 
-          />
-        </div>
-        <div>
-          <div className="sidebar-brand-name">LAPTOP_GUY</div>
-          <div className="sidebar-brand-sub">Laptop Billing POS</div>
-        </div>
-      </div>
+    <>
+      {/* Mobile Drawer Backdrop Overlay */}
+      {isOpen && (
+        <div 
+          className="sidebar-backdrop"
+          onClick={onClose}
+          aria-hidden="true"
+        />
+      )}
 
-      <nav className="sidebar-nav">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                `sidebar-link ${isActive ? "active" : ""}`
-              }
-            >
-              <Icon size={18} />
-              <span>{item.label}</span>
-            </NavLink>
-          );
-        })}
-      </nav>
-
-      <div className="sidebar-footer">
-        {user && (
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            padding: "8px 10px",
-            backgroundColor: "#1e293b",
-            borderRadius: "8px",
-            marginBottom: "10px"
-          }}>
-            <div style={{
-              width: "28px",
-              height: "28px",
-              borderRadius: "50%",
-              backgroundColor: "#2563eb",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "#ffffff",
-              fontWeight: 700,
-              fontSize: "12px",
-              flexShrink: 0
-            }}>
-              A
+      <aside className={`sidebar ${isOpen ? "sidebar-mobile-open" : ""}`}>
+        <div className="sidebar-header">
+          <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
+            <div className="sidebar-logo" style={{ overflow: "hidden", padding: 0 }}>
+              <img 
+                src={logoImg} 
+                alt="Laptop Guy Logo" 
+                style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }} 
+              />
             </div>
-            <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-              <div style={{ fontSize: "12px", fontWeight: 700, color: "#f8fafc" }}>Admin Account</div>
-              <div style={{ fontSize: "11px", color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {user.email}
-              </div>
+            <div>
+              <div className="sidebar-brand-name">LAPTOP_GUY</div>
+              <div className="sidebar-brand-sub">Laptop Billing POS</div>
             </div>
           </div>
-        )}
 
-        <button
-          type="button"
-          onClick={handleLogout}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            width: "100%",
-            padding: "9px 12px",
-            backgroundColor: "rgba(239, 68, 68, 0.12)",
-            border: "1px solid rgba(239, 68, 68, 0.3)",
-            color: "#f87171",
-            borderRadius: "8px",
-            fontSize: "13px",
-            fontWeight: 600,
-            cursor: "pointer",
-            marginBottom: "12px",
-            transition: "all 0.15s ease"
-          }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.backgroundColor = "#ef4444";
-            e.currentTarget.style.color = "#ffffff";
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.12)";
-            e.currentTarget.style.color = "#f87171";
-          }}
-        >
-          <LogOut size={15} />
-          <span>Sign Out</span>
-        </button>
-
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#10b981", fontWeight: 600 }}>
-          <ShieldCheck size={14} />
-          <span>GST Ready & Certified</span>
+          {/* Close button visible on mobile */}
+          <button
+            type="button"
+            className="sidebar-mobile-close"
+            onClick={onClose}
+            aria-label="Close navigation menu"
+          >
+            <X size={20} />
+          </button>
         </div>
-        <div>System Version 1.0.0</div>
-      </div>
-    </aside>
+
+        <nav className="sidebar-nav">
+          {navItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={handleNavClick}
+                className={({ isActive }) =>
+                  `sidebar-link ${isActive ? "active" : ""}`
+                }
+              >
+                <Icon size={18} />
+                <span>{item.label}</span>
+              </NavLink>
+            );
+          })}
+        </nav>
+
+        <div className="sidebar-footer">
+          {user && (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "8px 10px",
+              backgroundColor: "#1e293b",
+              borderRadius: "8px",
+              marginBottom: "10px"
+            }}>
+              <div style={{
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                backgroundColor: "#2563eb",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#ffffff",
+                fontWeight: 700,
+                fontSize: "12px",
+                flexShrink: 0
+              }}>
+                A
+              </div>
+              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                <div style={{ fontSize: "12px", fontWeight: 700, color: "#f8fafc" }}>Admin Account</div>
+                <div style={{ fontSize: "11px", color: "#94a3b8", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {user.email}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              width: "100%",
+              padding: "9px 12px",
+              backgroundColor: "rgba(239, 68, 68, 0.12)",
+              border: "1px solid rgba(239, 68, 68, 0.3)",
+              color: "#f87171",
+              borderRadius: "8px",
+              fontSize: "13px",
+              fontWeight: 600,
+              cursor: "pointer",
+              marginBottom: "12px",
+              transition: "all 0.15s ease"
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.backgroundColor = "#ef4444";
+              e.currentTarget.style.color = "#ffffff";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = "rgba(239, 68, 68, 0.12)";
+              e.currentTarget.style.color = "#f87171";
+            }}
+          >
+            <LogOut size={15} />
+            <span>Sign Out</span>
+          </button>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#10b981", fontWeight: 600 }}>
+            <ShieldCheck size={14} />
+            <span>GST Ready & Certified</span>
+          </div>
+          <div>System Version 1.0.0</div>
+        </div>
+      </aside>
+    </>
   );
 }

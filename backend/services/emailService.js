@@ -726,8 +726,177 @@ ${businessEmail}
 };
 
 /**
+ * Send 6-Digit Admin Verification OTP Email via Brevo HTTPS API
+ */
+const sendOtpEmail = async ({ to, otp, purpose = "AUTHENTICATION" }) => {
+  if (!to || !to.trim()) {
+    throw new Error("Admin email address is required to send OTP.");
+  }
+
+  const apiKey = (process.env.BREVO_API_KEY || "").trim();
+  if (!apiKey) {
+    throw new Error("BREVO_API_KEY is missing. Please add BREVO_API_KEY to your environment variables.");
+  }
+
+  const businessName = businessConfig.businessName || "Laptop Guy Laptops & Computers";
+  const businessEmail = businessConfig.email || "laptopguysales@gmail.com";
+  const businessPhone = businessConfig.phone || "+91 7795330943";
+
+  const purposeText = purpose === "SETUP" 
+    ? "First-Time Admin Password Setup" 
+    : "Admin Password Reset Request";
+
+  const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: #1e293b;
+    margin: 0;
+    padding: 0;
+    background-color: #f8fafc;
+  }
+  .wrapper {
+    max-width: 520px;
+    margin: 24px auto;
+    background: #ffffff;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  }
+  .header {
+    background: #0f172a;
+    padding: 24px 28px;
+    color: #ffffff;
+    text-align: center;
+  }
+  .header h1 {
+    margin: 0 0 4px 0;
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+  }
+  .header p {
+    margin: 0;
+    font-size: 12px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .content {
+    padding: 28px;
+    text-align: center;
+  }
+  .otp-box {
+    margin: 24px 0;
+    padding: 16px;
+    background-color: #eff6ff;
+    border: 2px dashed #93c5fd;
+    border-radius: 10px;
+  }
+  .otp-code {
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: 8px;
+    color: #2563eb;
+    display: inline-block;
+  }
+  .note {
+    font-size: 12.5px;
+    color: #64748b;
+    margin-top: 16px;
+  }
+  .footer {
+    background: #f1f5f9;
+    padding: 16px 28px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 11.5px;
+    color: #64748b;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h1>${businessName}</h1>
+      <p>Security & Access Control</p>
+    </div>
+    <div class="content">
+      <h2 style="font-size: 17px; font-weight: 700; color: #0f172a; margin-bottom: 8px;">
+        ${purposeText}
+      </h2>
+      <p style="font-size: 13.5px; color: #475569; margin-bottom: 16px;">
+        Use the one-time verification code below to verify your admin account and proceed with your password configuration.
+      </p>
+      
+      <div class="otp-box">
+        <div class="otp-code">${otp}</div>
+      </div>
+
+      <p style="font-size: 13px; font-weight: 600; color: #b91c1c;">
+        ⏱️ This OTP expires in 5 minutes.
+      </p>
+
+      <p class="note">
+        If you did not request this verification code, please ignore this email or review your account security immediately. Never share your OTP with anyone.
+      </p>
+    </div>
+    <div class="footer">
+      <strong>${businessName}</strong><br>
+      Billing & Inventory Management Portal • Authorized Admin Only
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const plainText = `
+${businessName} - ${purposeText}
+
+Your 6-digit verification code is: ${otp}
+
+This code is valid for 5 minutes.
+If you did not request this, please disregard this email.
+  `.trim();
+
+  const brevoClient = new BrevoClient({ apiKey });
+  const senderEmail = (process.env.BREVO_FROM_EMAIL || businessEmail).trim();
+  const senderName = (process.env.BREVO_FROM_NAME || businessName).trim();
+
+  try {
+    const result = await brevoClient.transactionalEmails.sendTransacEmail({
+      sender: { name: senderName, email: senderEmail },
+      to: [{ email: to.trim(), name: "System Administrator" }],
+      subject: `[${otp}] Your Admin Verification Code - ${businessName}`,
+      htmlContent: emailHtml,
+      textContent: plainText
+    });
+
+    console.log(`[EmailService] OTP email sent successfully to ${to.trim()}`);
+    return result;
+  } catch (error) {
+    console.error("[EmailService] Brevo OTP Email Error:", error);
+    const errorMessage =
+      error?.response?.body?.message ||
+      error?.body?.message ||
+      error?.message ||
+      JSON.stringify(error);
+
+    throw new Error(`Brevo Delivery Error: ${errorMessage}`);
+  }
+};
+
+/**
  * Export
  */
 module.exports = {
-  sendInvoiceEmail
+  sendInvoiceEmail,
+  sendOtpEmail
 };

@@ -11,7 +11,9 @@ import {
   Calendar,
   Sparkles,
   Percent,
-  ReceiptText
+  ReceiptText,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -35,6 +37,7 @@ export default function Profit() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [chartType, setChartType] = useState("bar"); // "bar" | "area"
+  const [showAmounts, setShowAmounts] = useState(true);
   const [toast, setToast] = useState(null);
 
   const fetchProfitData = async () => {
@@ -65,6 +68,11 @@ export default function Profit() {
       currency: "INR",
       maximumFractionDigits: 0
     }).format(val || 0);
+  };
+
+  const displayAmount = (val) => {
+    if (!showAmounts) return "₹ ••••••";
+    return formatCurrency(val);
   };
 
   const formatAxisCurrency = (val) => {
@@ -190,7 +198,17 @@ export default function Profit() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowAmounts(!showAmounts)}
+            title={showAmounts ? "Hide profit figures" : "Show profit figures"}
+          >
+            {showAmounts ? <EyeOff size={15} /> : <Eye size={15} />}
+            <span>{showAmounts ? "Hide Amounts" : "Show Amounts"}</span>
+          </button>
+
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -214,7 +232,7 @@ export default function Profit() {
       <div className="stat-card-grid">
         <StatCard
           title="Overall Net Profit"
-          value={formatCurrency(overallProfit)}
+          value={displayAmount(overallProfit)}
           sub="Total profit earned across all sales"
           icon={TrendingUp}
           iconBg="#ecfdf5"
@@ -223,7 +241,7 @@ export default function Profit() {
 
         <StatCard
           title="Total Billed Revenue"
-          value={formatCurrency(totalRevenue)}
+          value={displayAmount(totalRevenue)}
           sub="Gross sales invoiced to buyers"
           icon={IndianRupee}
           iconBg="#eff6ff"
@@ -241,7 +259,7 @@ export default function Profit() {
 
         <StatCard
           title="Average Profit / Unit"
-          value={formatCurrency(avgProfitPerUnit)}
+          value={displayAmount(avgProfitPerUnit)}
           sub={`Overall Margin: ${overallMargin}%`}
           icon={Percent}
           iconBg="#fffbeb"

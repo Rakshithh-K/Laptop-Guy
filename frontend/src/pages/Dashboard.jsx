@@ -1,19 +1,20 @@
 import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { 
-  Laptop, 
-  CheckCircle2, 
-  ShoppingBag, 
-  IndianRupee, 
-  TrendingUp, 
-  Clock, 
-  Plus, 
-  ReceiptText, 
-  UserPlus, 
-  Download, 
-  Eye, 
-  Layers, 
-  AlertCircle, 
+import {
+  Laptop,
+  CheckCircle2,
+  ShoppingBag,
+  IndianRupee,
+  TrendingUp,
+  Clock,
+  Eye,
+  EyeOff,
+  Plus,
+  ReceiptText,
+  UserPlus,
+  Download,
+  Layers,
+  AlertCircle,
   RefreshCw,
   Wallet
 } from "lucide-react";
@@ -30,7 +31,8 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  
+  const [showAmounts, setShowAmounts] = useState(true);
+
   // Modals state
   const [laptopModalOpen, setLaptopModalOpen] = useState(false);
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
@@ -76,6 +78,11 @@ export default function Dashboard() {
     }).format(val || 0);
   };
 
+  const displayAmount = (val) => {
+    if (!showAmounts) return "₹ ••••••";
+    return formatCurrency(val);
+  };
+
   if (loading && !stats) {
     return (
       <div className="state-container">
@@ -108,7 +115,14 @@ export default function Dashboard() {
   return (
     <div>
       {/* Action Header */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px", flexWrap: "wrap", gap: "12px" }}>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "20px",
+        flexWrap: "wrap",
+        gap: "12px"
+      }}>
         <div>
           <h2 style={{ fontSize: "22px", fontWeight: 800, color: "#0f172a", letterSpacing: "-0.5px" }}>
             Overview & Performance
@@ -118,28 +132,39 @@ export default function Dashboard() {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button 
-            type="button" 
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {/* Privacy Toggle Button */}
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowAmounts(!showAmounts)}
+            title={showAmounts ? "Hide financial figures" : "Show financial figures"}
+          >
+            {showAmounts ? <EyeOff size={15} /> : <Eye size={15} />}
+            <span>{showAmounts ? "Hide Amounts" : "Show Amounts"}</span>
+          </button>
+
+          <button
+            type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => setCustomerModalOpen(true)}
           >
             <UserPlus size={15} />
-            <span>+ Add Customer</span>
+            <span>+ Customer</span>
           </button>
-          
-          <button 
-            type="button" 
+
+          <button
+            type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => setLaptopModalOpen(true)}
           >
             <Plus size={15} />
-            <span>+ Add Laptop</span>
+            <span>+ Laptop</span>
           </button>
 
           <Link to="/create-bill" className="btn btn-primary btn-sm">
             <ReceiptText size={15} />
-            <span>Create New Bill</span>
+            <span>Create Bill</span>
           </Link>
         </div>
       </div>
@@ -158,7 +183,7 @@ export default function Dashboard() {
         <StatCard
           title="Available Stock"
           value={metrics.availableLaptops || 0}
-          sub={`Value: ${formatCurrency(metrics.stockSellingValue)}`}
+          sub={`Value: ${displayAmount(metrics.stockSellingValue)}`}
           icon={CheckCircle2}
           iconBg="#ecfdf5"
           iconColor="#059669"
@@ -175,7 +200,7 @@ export default function Dashboard() {
 
         <StatCard
           title="Total Sales Revenue"
-          value={formatCurrency(metrics.totalSales)}
+          value={displayAmount(metrics.totalSales)}
           sub="Gross billed revenue"
           icon={IndianRupee}
           iconBg="#eff6ff"
@@ -184,7 +209,7 @@ export default function Dashboard() {
 
         <StatCard
           title="Profit"
-          value={formatCurrency(metrics.totalProfit || 0)}
+          value={displayAmount(metrics.totalProfit || 0)}
           sub="Click for monthly analytics →"
           badge="Analytics"
           icon={TrendingUp}
@@ -195,7 +220,7 @@ export default function Dashboard() {
 
         <StatCard
           title="Total Investment"
-          value={formatCurrency(metrics.stockPurchaseValue || 0)}
+          value={displayAmount(metrics.stockPurchaseValue || 0)}
           sub={`${metrics.availableLaptops || 0} Units in Stock · View Analytics →`}
           badge="Cost"
           icon={Wallet}
@@ -206,7 +231,7 @@ export default function Dashboard() {
 
         <StatCard
           title="Today's Sales"
-          value={formatCurrency(metrics.todaySales)}
+          value={displayAmount(metrics.todaySales)}
           sub="Invoiced today"
           icon={TrendingUp}
           iconBg="#eff6ff"
@@ -215,7 +240,7 @@ export default function Dashboard() {
 
         <StatCard
           title="Pending Payments"
-          value={formatCurrency(metrics.pendingPayments)}
+          value={displayAmount(metrics.pendingPayments)}
           sub="Outstanding receivables"
           icon={Clock}
           iconBg="#fef2f2"
@@ -224,9 +249,14 @@ export default function Dashboard() {
       </div>
 
       {/* Main Grid: Recent Invoices & Stock Breakdown */}
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px", alignItems: "start" }}>
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+        gap: "20px",
+        alignItems: "start"
+      }}>
         {/* Recent Invoices Card */}
-        <div className="card">
+        <div className="card" style={{ gridColumn: "span 2", minWidth: 0 }}>
           <div className="card-header">
             <div>
               <h3 className="card-title">Recent Invoices</h3>
@@ -241,7 +271,7 @@ export default function Dashboard() {
             <div style={{ textAlign: "center", padding: "32px 16px", color: "#64748b" }}>
               <ReceiptText size={32} color="#cbd5e1" style={{ margin: "0 auto 8px" }} />
               <p style={{ fontWeight: 600 }}>No bills generated yet.</p>
-              <p style={{ fontSize: "12px", marginTop: "4px" }}>Click "Create New Bill" to generate your first invoice.</p>
+              <p style={{ fontSize: "12px", marginTop: "4px" }}>Click "Create Bill" to generate your first invoice.</p>
             </div>
           ) : (
             <div className="table-container" style={{ border: "none", boxShadow: "none" }}>
@@ -303,7 +333,7 @@ export default function Dashboard() {
                         })()}
                       </td>
                       <td style={{ fontWeight: 700 }}>
-                        {formatCurrency(inv.totalAmount)}
+                        {displayAmount(inv.totalAmount)}
                       </td>
                       <td>
                         <StatusBadge status={inv.paymentStatus} />
@@ -337,11 +367,11 @@ export default function Dashboard() {
         </div>
 
         {/* Available Stock by Brand */}
-        <div className="card">
+        <div className="card" style={{ minWidth: 0 }}>
           <div className="card-header">
             <div>
               <h3 className="card-title">Stock by Brand</h3>
-              <div className="card-subtitle">Ready-to-bill inventory breakdown</div>
+              <div className="card-subtitle">Ready-to-bill inventory</div>
             </div>
             <Link to="/inventory" className="btn btn-secondary btn-sm">
               <Layers size={13} />
@@ -354,15 +384,15 @@ export default function Dashboard() {
               <p style={{ fontWeight: 600 }}>No laptops in stock.</p>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
               {brandStats.map((b) => (
-                <div 
-                  key={b._id} 
+                <div
+                  key={b._id}
                   style={{
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "12px 14px",
+                    padding: "10px 12px",
                     backgroundColor: "#f8fafc",
                     borderRadius: "8px",
                     border: "1px solid #e2e8f0"
@@ -370,8 +400,8 @@ export default function Dashboard() {
                 >
                   <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                     <div style={{
-                      width: "32px",
-                      height: "32px",
+                      width: "30px",
+                      height: "30px",
                       borderRadius: "6px",
                       backgroundColor: "#eff6ff",
                       color: "#2563eb",
@@ -379,16 +409,16 @@ export default function Dashboard() {
                       alignItems: "center",
                       justifyContent: "center",
                       fontWeight: 700,
-                      fontSize: "13px"
+                      fontSize: "12.5px"
                     }}>
                       {b._id ? b._id.charAt(0).toUpperCase() : "L"}
                     </div>
                     <div>
-                      <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "13.5px" }}>
+                      <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "13px" }}>
                         {b._id || "Other"}
                       </div>
                       <div style={{ fontSize: "11px", color: "#64748b" }}>
-                        Valuation: {formatCurrency(b.totalValue)}
+                        Valuation: {displayAmount(b.totalValue)}
                       </div>
                     </div>
                   </div>

@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 
 const JWT_SECRET = process.env.JWT_SECRET || "laptopguy_jwt_secret_key_98374928374";
+const ALLOWED_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "laptopguysales@gmail.com").trim().toLowerCase();
 
 const authMiddleware = (req, res, next) => {
     try {
@@ -24,9 +25,8 @@ const authMiddleware = (req, res, next) => {
 
         const decoded = jwt.verify(token, JWT_SECRET);
 
-        // Verify that the token corresponds to the configured admin
-        const adminEmail = process.env.ADMIN_EMAIL || "nawazlaptop@gmail.com";
-        if (decoded.email !== adminEmail) {
+        // Verify that the token corresponds to the authorized single admin
+        if (!decoded.email || decoded.email.trim().toLowerCase() !== ALLOWED_ADMIN_EMAIL) {
             return res.status(401).json({
                 success: false,
                 message: "Authentication required"

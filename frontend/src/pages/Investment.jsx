@@ -12,7 +12,9 @@ import {
   Percent,
   Plus,
   Boxes,
-  Landmark
+  Landmark,
+  Eye,
+  EyeOff
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -36,6 +38,7 @@ export default function Investment() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [chartType, setChartType] = useState("bar"); // "bar" | "area"
+  const [showAmounts, setShowAmounts] = useState(true);
   const [laptopModalOpen, setLaptopModalOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
@@ -67,6 +70,11 @@ export default function Investment() {
       currency: "INR",
       maximumFractionDigits: 0
     }).format(val || 0);
+  };
+
+  const displayAmount = (val) => {
+    if (!showAmounts) return "₹ ••••••";
+    return formatCurrency(val);
   };
 
   const formatAxisCurrency = (val) => {
@@ -185,7 +193,17 @@ export default function Investment() {
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={() => setShowAmounts(!showAmounts)}
+            title={showAmounts ? "Hide investment figures" : "Show investment figures"}
+          >
+            {showAmounts ? <EyeOff size={15} /> : <Eye size={15} />}
+            <span>{showAmounts ? "Hide Amounts" : "Show Amounts"}</span>
+          </button>
+
           <button
             type="button"
             className="btn btn-secondary btn-sm"
@@ -213,7 +231,7 @@ export default function Investment() {
       <div className="stat-card-grid">
         <StatCard
           title="Current Inventory Investment"
-          value={formatCurrency(currentInvestment)}
+          value={displayAmount(currentInvestment)}
           sub="Active capital in unsold stock"
           badge="Current"
           icon={Wallet}
@@ -223,7 +241,7 @@ export default function Investment() {
 
         <StatCard
           title="Total Purchase Investment"
-          value={formatCurrency(totalInvestment)}
+          value={displayAmount(totalInvestment)}
           sub={`${totalLaptopsCount} total laptops acquired all-time`}
           icon={Landmark}
           iconBg="#eff6ff"
@@ -241,7 +259,7 @@ export default function Investment() {
 
         <StatCard
           title="Avg Purchase Cost"
-          value={formatCurrency(averagePurchasePrice)}
+          value={displayAmount(averagePurchasePrice)}
           sub="Per unit available in stock"
           icon={IndianRupee}
           iconBg="#f5f3ff"

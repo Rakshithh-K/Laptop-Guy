@@ -1,5 +1,5 @@
-import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import React, { useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Sidebar from "./components/Sidebar";
@@ -16,14 +16,27 @@ import Customers from "./pages/Customers";
 
 // Layout wrapper for authenticated dashboard routes
 function AppLayout({ children }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+
+  // Auto-close sidebar on route change
+  React.useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
+
   return (
     <div className="app-container">
-      {/* Sidebar */}
-      <Sidebar />
+      {/* Sidebar with mobile drawer support */}
+      <Sidebar 
+        isOpen={sidebarOpen} 
+        onClose={() => setSidebarOpen(false)} 
+      />
 
       {/* Main Content Area */}
       <div className="main-wrapper">
-        <Topbar />
+        <Topbar 
+          onToggleSidebar={() => setSidebarOpen(prev => !prev)} 
+        />
         <main className="page-content">
           {children}
         </main>

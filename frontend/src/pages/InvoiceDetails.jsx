@@ -191,13 +191,15 @@ export default function InvoiceDetails() {
       </div>
 
       {/* Printable Invoice Sheet Card */}
-      <div className="card" style={{ padding: "36px 40px", backgroundColor: "#ffffff" }}>
+      <div className="card invoice-sheet-card">
 
         {/* Header */}
         <div style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "flex-start",
+          flexWrap: "wrap",
+          gap: "16px",
           borderBottom: "2px solid #0f172a",
           paddingBottom: "20px",
           marginBottom: "24px"
@@ -232,7 +234,7 @@ export default function InvoiceDetails() {
 
             <div style={{ fontSize: "12px", color: "#475569", lineHeight: 1.4 }}>
               {businessInfo?.address || "#667, Kumbarageri 3rd cross, C H Mohalla, Mysore - 570004"}<br />
-              <strong>Phone:</strong> {businessInfo?.phone || "+91 7795330943 / +91 80 2345 6789"} | <strong>Email:</strong> {businessInfo?.email || "billing@nextgenlaptops.com"}<br />
+              <strong>Phone:</strong> {businessInfo?.phone || "+91 7795330943 / +91 8217482089"} | <strong>Email:</strong> {businessInfo?.email || "billing@nextgenlaptops.com"}<br />
               {businessInfo?.gstin && <span><strong>GSTIN:</strong> {businessInfo.gstin}</span>}
             </div>
           </div>

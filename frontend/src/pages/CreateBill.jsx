@@ -382,7 +382,7 @@ export default function CreateBill() {
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 0.9fr", gap: "24px", alignItems: "start" }}>
+      <div className="create-bill-grid">
 
         {/* Left Column: Customer & Invoice Items */}
         <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
