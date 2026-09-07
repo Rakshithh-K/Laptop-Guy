@@ -13,7 +13,11 @@ import {
   Percent,
   ReceiptText,
   Eye,
-  EyeOff
+  EyeOff,
+  RotateCcw,
+  Undo2,
+  Layers,
+  ArrowDownLeft
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -79,6 +83,8 @@ export default function Profit() {
     if (val >= 10000000) return `₹${(val / 10000000).toFixed(1)}Cr`;
     if (val >= 100000) return `₹${(val / 100000).toFixed(1)}L`;
     if (val >= 1000) return `₹${(val / 1000).toFixed(0)}k`;
+    if (val <= -100000) return `-₹${(Math.abs(val) / 100000).toFixed(1)}L`;
+    if (val <= -1000) return `-₹${(Math.abs(val) / 1000).toFixed(0)}k`;
     return `₹${val}`;
   };
 
@@ -87,7 +93,7 @@ export default function Profit() {
       <div className="state-container">
         <div className="spinner"></div>
         <p style={{ marginTop: "16px", color: "#64748b", fontWeight: 500 }}>
-          Calculating chronological profit analytics...
+          Calculating chronological profit analytics accounting for sales & returns...
         </p>
       </div>
     );
@@ -109,13 +115,19 @@ export default function Profit() {
     );
   }
 
-  const overallProfit = data?.overallProfit || 0;
+  const overallProfit = data?.overallProfit || 0; // Net profit after returns
+  const grossSalesProfit = data?.grossSalesProfit || 0; // Gross profit before returns
+  const totalRefunds = data?.totalRefunds || 0;
+  const totalReturnCost = data?.totalReturnCost || 0;
   const totalSoldUnits = data?.totalSoldUnits || 0;
+  const totalReturnedUnits = data?.totalReturnedUnits || 0;
+  const netSoldUnits = data?.netSoldUnits !== undefined ? data.netSoldUnits : (totalSoldUnits - totalReturnedUnits);
   const totalRevenue = data?.totalRevenue || 0;
+  const netRevenue = data?.netRevenue !== undefined ? data.netRevenue : (totalRevenue - totalRefunds);
   const monthlyProfit = data?.monthlyProfit || [];
 
-  const avgProfitPerUnit = totalSoldUnits > 0 ? Math.round(overallProfit / totalSoldUnits) : 0;
-  const overallMargin = totalRevenue > 0 ? ((overallProfit / totalRevenue) * 100).toFixed(1) : 0;
+  const avgProfitPerUnit = netSoldUnits > 0 ? Math.round(overallProfit / netSoldUnits) : 0;
+  const netMargin = netRevenue > 0 ? ((overallProfit / netRevenue) * 100).toFixed(1) : 0;
 
   // Custom chart tooltip
   const CustomTooltip = ({ active, payload, label }) => {
@@ -129,34 +141,49 @@ export default function Profit() {
           borderRadius: "10px",
           boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.3)",
           border: "1px solid #334155",
-          fontSize: "13px"
+          fontSize: "13px",
+          minWidth: "200px"
         }}>
           <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "8px", borderBottom: "1px solid #334155", paddingBottom: "6px" }}>
             {monthData.fullMonth || label}
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "20px", marginBottom: "4px" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", marginBottom: "4px" }}>
             <span style={{ color: "#94a3b8" }}>Net Profit:</span>
-            <strong style={{ color: "#34d399", fontWeight: 700 }}>
+            <strong style={{ color: monthData.profit >= 0 ? "#34d399" : "#f87171", fontWeight: 700 }}>
               {formatCurrency(monthData.profit)}
             </strong>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "20px", marginBottom: "4px" }}>
-            <span style={{ color: "#94a3b8" }}>Invoiced Revenue:</span>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", marginBottom: "4px" }}>
+            <span style={{ color: "#94a3b8" }}>Gross Sales Profit:</span>
+            <span style={{ color: "#e2e8f0", fontWeight: 600 }}>
+              {formatCurrency(monthData.grossSalesProfit || 0)}
+            </span>
+          </div>
+          {(monthData.refunds || 0) > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", marginBottom: "4px" }}>
+              <span style={{ color: "#f87171" }}>Refunds Deducted:</span>
+              <span style={{ color: "#f87171", fontWeight: 600 }}>
+                - {formatCurrency(monthData.refunds)}
+              </span>
+            </div>
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", marginBottom: "4px" }}>
+            <span style={{ color: "#94a3b8" }}>Billed Revenue:</span>
             <span style={{ color: "#93c5fd", fontWeight: 600 }}>
               {formatCurrency(monthData.revenue)}
             </span>
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "20px", marginBottom: "4px" }}>
-            <span style={{ color: "#94a3b8" }}>Units Sold:</span>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", marginBottom: "4px" }}>
+            <span style={{ color: "#94a3b8" }}>Units Sold / Ret:</span>
             <span style={{ color: "#f8fafc", fontWeight: 600 }}>
-              {monthData.soldUnits} {monthData.soldUnits === 1 ? "Unit" : "Units"}
+              {monthData.soldUnits} sold · {monthData.returnedUnits || 0} ret
             </span>
           </div>
           {monthData.revenue > 0 && (
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "20px" }}>
-              <span style={{ color: "#94a3b8" }}>Profit Margin:</span>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "16px", borderTop: "1px dashed #334155", paddingTop: "4px", marginTop: "4px" }}>
+              <span style={{ color: "#94a3b8" }}>Net Margin:</span>
               <span style={{ color: "#fbbf24", fontWeight: 700 }}>
-                {((monthData.profit / monthData.revenue) * 100).toFixed(1)}%
+                {((monthData.profit / (monthData.revenue || 1)) * 100).toFixed(1)}%
               </span>
             </div>
           )}
@@ -193,7 +220,7 @@ export default function Profit() {
               Profit Analytics
             </h2>
             <p style={{ fontSize: "13px", color: "#64748b" }}>
-              Chronological profit margins calculated from Selling Price minus Laptop Purchase Price.
+              Chronological profit trajectory: Gross Sales Profit minus Product Returns and Customer Refunds.
             </p>
           </div>
         </div>
@@ -221,6 +248,11 @@ export default function Profit() {
             <span>Refresh</span>
           </button>
 
+          <Link to="/returns" className="btn btn-secondary btn-sm">
+            <RotateCcw size={15} />
+            <span>Return History</span>
+          </Link>
+
           <Link to="/create-bill" className="btn btn-primary btn-sm">
             <ReceiptText size={15} />
             <span>Create Bill</span>
@@ -228,43 +260,106 @@ export default function Profit() {
         </div>
       </div>
 
-      {/* KPI Cards Grid */}
-      <div className="stat-card-grid">
+      {/* KPI Cards Grid - 4 Prompt Required Cards */}
+      <div className="stat-card-grid" style={{ marginBottom: "24px" }}>
         <StatCard
-          title="Overall Net Profit"
+          title="Net Profit"
           value={displayAmount(overallProfit)}
-          sub="Total profit earned across all sales"
+          sub="True bottom-line profit after returns"
           icon={TrendingUp}
           iconBg="#ecfdf5"
           iconColor="#059669"
         />
 
         <StatCard
-          title="Total Billed Revenue"
-          value={displayAmount(totalRevenue)}
-          sub="Gross sales invoiced to buyers"
+          title="Gross Sales Profit"
+          value={displayAmount(grossSalesProfit)}
+          sub="Profit earned before return deductions"
           icon={IndianRupee}
           iconBg="#eff6ff"
           iconColor="#2563eb"
         />
 
         <StatCard
-          title="Sold Items"
-          value={totalSoldUnits}
-          sub={`${totalSoldUnits === 1 ? "Unit" : "Units"} sold to date`}
-          icon={ShoppingBag}
-          iconBg="#f5f3ff"
-          iconColor="#7c3aed"
+          title="Total Refunds"
+          value={displayAmount(totalRefunds)}
+          sub={`${totalReturnedUnits} unit(s) refunded to customers`}
+          icon={ArrowDownLeft}
+          iconBg="#fef2f2"
+          iconColor="#dc2626"
+          onClick={() => navigate("/returns")}
         />
 
         <StatCard
-          title="Average Profit / Unit"
-          value={displayAmount(avgProfitPerUnit)}
-          sub={`Overall Margin: ${overallMargin}%`}
-          icon={Percent}
+          title="Return Cost"
+          value={displayAmount(totalReturnCost)}
+          sub="Restored inventory purchase cost"
+          icon={RotateCcw}
           iconBg="#fffbeb"
           iconColor="#d97706"
         />
+      </div>
+
+      {/* Secondary Metrics Row */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+        gap: "14px",
+        marginBottom: "24px"
+      }}>
+        <div style={{
+          backgroundColor: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "10px",
+          padding: "14px 18px",
+          boxShadow: "var(--shadow-sm)"
+        }}>
+          <div style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
+            Total Billed Revenue
+          </div>
+          <div style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a", marginTop: "2px" }}>
+            {displayAmount(totalRevenue)}
+          </div>
+          <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "2px" }}>
+            Net: {displayAmount(netRevenue)}
+          </div>
+        </div>
+
+        <div style={{
+          backgroundColor: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "10px",
+          padding: "14px 18px",
+          boxShadow: "var(--shadow-sm)"
+        }}>
+          <div style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
+            Net Sold Units
+          </div>
+          <div style={{ fontSize: "18px", fontWeight: 800, color: "#0f172a", marginTop: "2px" }}>
+            {netSoldUnits} Units
+          </div>
+          <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "2px" }}>
+            {totalSoldUnits} gross · {totalReturnedUnits} returned
+          </div>
+        </div>
+
+        <div style={{
+          backgroundColor: "#ffffff",
+          border: "1px solid #e2e8f0",
+          borderRadius: "10px",
+          padding: "14px 18px",
+          boxShadow: "var(--shadow-sm)"
+        }}>
+          <div style={{ fontSize: "11.5px", color: "#64748b", fontWeight: 700, textTransform: "uppercase" }}>
+            Net Profit Margin
+          </div>
+          <div style={{ fontSize: "18px", fontWeight: 800, color: "#059669", marginTop: "2px" }}>
+            {netMargin}%
+          </div>
+          <div style={{ fontSize: "11.5px", color: "#64748b", marginTop: "2px" }}>
+            Avg {displayAmount(avgProfitPerUnit)} / net unit
+          </div>
+        </div>
       </div>
 
       {/* Monthly Profit Chart Card */}
@@ -285,7 +380,7 @@ export default function Profit() {
               </span>
             </div>
             <div className="card-subtitle">
-              Chronological profit trajectory calculated per billed invoice item
+              Net monthly profit trajectory accounting for sales and month-of-return refunds
             </div>
           </div>
 
@@ -410,8 +505,8 @@ export default function Profit() {
         <div className="card">
           <div className="card-header">
             <div>
-              <h3 className="card-title">Monthly Profit Breakdown</h3>
-              <div className="card-subtitle">Detailed chronological statement of billing performance</div>
+              <h3 className="card-title">Monthly Statement & Returns Breakdown</h3>
+              <div className="card-subtitle">Chronological record of sales profit, refunds, and net profit</div>
             </div>
           </div>
 
@@ -421,15 +516,17 @@ export default function Profit() {
                 <tr>
                   <th>Month</th>
                   <th>Invoices</th>
-                  <th>Units Sold</th>
-                  <th>Invoiced Revenue</th>
+                  <th>Sold / Ret</th>
+                  <th>Gross Profit</th>
+                  <th>Refunds</th>
                   <th>Net Profit</th>
                   <th>Margin %</th>
                 </tr>
               </thead>
               <tbody>
                 {monthlyProfit.map((m) => {
-                  const marginPct = m.revenue > 0 ? ((m.profit / m.revenue) * 100).toFixed(1) : "0.0";
+                  const mNetRev = m.revenue - (m.refunds || 0);
+                  const marginPct = mNetRev > 0 ? ((m.profit / mNetRev) * 100).toFixed(1) : (m.revenue > 0 ? ((m.profit / m.revenue) * 100).toFixed(1) : "0.0");
                   return (
                     <tr key={m.key}>
                       <td style={{ fontWeight: 700, color: "#0f172a" }}>
@@ -445,11 +542,14 @@ export default function Profit() {
                       </td>
                       <td>
                         <span className="badge badge-sold">
-                          {m.soldUnits} {m.soldUnits === 1 ? "Unit" : "Units"}
+                          {m.soldUnits} sold {m.returnedUnits > 0 && `· ${m.returnedUnits} ret`}
                         </span>
                       </td>
                       <td style={{ fontWeight: 600, color: "#0f172a" }}>
-                        {formatCurrency(m.revenue)}
+                        {formatCurrency(m.grossSalesProfit || 0)}
+                      </td>
+                      <td style={{ fontWeight: 600, color: (m.refunds || 0) > 0 ? "#dc2626" : "#64748b" }}>
+                        {(m.refunds || 0) > 0 ? `- ${formatCurrency(m.refunds)}` : "₹0"}
                       </td>
                       <td style={{ fontWeight: 800, color: m.profit >= 0 ? "#059669" : "#dc2626" }}>
                         {formatCurrency(m.profit)}
@@ -478,11 +578,14 @@ export default function Profit() {
                   <td>-</td>
                   <td>
                     <span className="badge badge-sold">
-                      {totalSoldUnits} Units
+                      {netSoldUnits} Net Units
                     </span>
                   </td>
                   <td style={{ color: "#0f172a" }}>
-                    {formatCurrency(totalRevenue)}
+                    {formatCurrency(grossSalesProfit)}
+                  </td>
+                  <td style={{ color: totalRefunds > 0 ? "#dc2626" : "#64748b" }}>
+                    {totalRefunds > 0 ? `- ${formatCurrency(totalRefunds)}` : "₹0"}
                   </td>
                   <td style={{ color: "#059669", fontSize: "15px" }}>
                     {formatCurrency(overallProfit)}
@@ -498,7 +601,7 @@ export default function Profit() {
                       backgroundColor: "#ecfdf5",
                       color: "#047857"
                     }}>
-                      {overallMargin}%
+                      {netMargin}%
                     </span>
                   </td>
                 </tr>

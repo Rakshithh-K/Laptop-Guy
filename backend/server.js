@@ -11,6 +11,7 @@ const customerRoutes = require("./routes/customerRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const businessRoutes = require("./routes/businessRoutes");
+const returnRoutes = require("./routes/returnRoutes");
 const authMiddleware = require("./middleware/authMiddleware");
 const { notFoundHandler, errorHandler } = require("./middleware/errorMiddleware");
 
@@ -81,6 +82,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/laptops", authMiddleware, laptopRoutes);
 app.use("/api/customers", authMiddleware, customerRoutes);
 app.use("/api/invoices", authMiddleware, invoiceRoutes);
+app.use("/api/returns", authMiddleware, returnRoutes);
 app.use("/api/dashboard", authMiddleware, dashboardRoutes);
 app.use("/api/business-info", authMiddleware, businessRoutes);
 

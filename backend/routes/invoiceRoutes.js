@@ -7,6 +7,7 @@ const {
     getInvoicePdf,
     sendInvoice
 } = require("../controllers/invoiceController");
+const { getInvoiceReturns } = require("../controllers/returnController");
 
 router.route("/")
     .get(getInvoices)
@@ -14,6 +15,9 @@ router.route("/")
 
 router.route("/:id")
     .get(getInvoiceById);
+
+router.route("/:id/returns")
+    .get(getInvoiceReturns);
 
 router.route("/:id/pdf")
     .get(getInvoicePdf);

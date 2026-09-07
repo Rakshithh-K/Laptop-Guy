@@ -13,9 +13,14 @@ import {
   RefreshCw,
   Send,
   Mail,
-  CheckCircle2
+  CheckCircle2,
+  RotateCcw,
+  Calendar,
+  IndianRupee,
+  FileText
 } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
+import ReturnModal from "../components/ReturnModal";
 import Toast from "../components/Toast";
 import { getInvoiceById, downloadInvoicePdf, sendInvoice } from "../api/invoiceApi";
 import { getBusinessInfo } from "../api/dashboardApi";
@@ -32,6 +37,7 @@ export default function InvoiceDetails() {
   const [error, setError] = useState("");
   const [downloading, setDownloading] = useState(false);
   const [sending, setSending] = useState(false);
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
   const fetchInvoiceDetails = async () => {
@@ -116,7 +122,18 @@ export default function InvoiceDetails() {
     });
   };
 
-  if (loading) {
+  const formatDateTime = (dateStr) => {
+    if (!dateStr) return "N/A";
+    return new Date(dateStr).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  };
+
+  if (loading && !invoice) {
     return (
       <div className="state-container">
         <div className="spinner"></div>
@@ -157,16 +174,48 @@ export default function InvoiceDetails() {
   const balance = Math.max(0, totalAmount - amountPaid);
   const transactionId = invoice.transactionId ? invoice.transactionId.trim() : "";
 
+  const returnsList = invoice.returns || [];
+  const itemReturnStatuses = invoice.itemReturnStatuses || [];
+  const overallReturnStatus = invoice.overallReturnStatus || "NOT_RETURNED";
+  const totalRefunded = invoice.totalRefunded || 0;
+
+  const canReturnProducts = overallReturnStatus !== "FULLY_RETURNED";
+
   return (
     <div style={{ maxWidth: "900px", margin: "0 auto" }}>
       {/* Top Action Bar */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "10px" }}>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "20px",
+        flexWrap: "wrap",
+        gap: "10px"
+      }}>
         <button type="button" className="btn btn-secondary" onClick={() => navigate("/invoices")}>
           <ArrowLeft size={16} />
           <span>Back to Invoices</span>
         </button>
 
-        <div style={{ display: "flex", gap: "10px" }}>
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          {/* Return Product Button */}
+          {canReturnProducts && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{
+                borderColor: "#f59e0b",
+                color: "#b45309",
+                backgroundColor: "#fffbeb"
+              }}
+              onClick={() => setReturnModalOpen(true)}
+              title="Process a product return for this invoice"
+            >
+              <RotateCcw size={15} />
+              <span>Return Product</span>
+            </button>
+          )}
+
           <button type="button" className="btn btn-secondary" onClick={handlePrint}>
             <Printer size={16} />
             <span>Print</span>
@@ -191,7 +240,7 @@ export default function InvoiceDetails() {
       </div>
 
       {/* Printable Invoice Sheet Card */}
-      <div className="card invoice-sheet-card">
+      <div className="card invoice-sheet-card" style={{ marginBottom: "24px" }}>
 
         {/* Header */}
         <div style={{
@@ -258,8 +307,11 @@ export default function InvoiceDetails() {
             <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
               Date: {formatDate(invoice.createdAt)}
             </div>
-            <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end", marginTop: "6px" }}>
+            <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end", marginTop: "6px", flexWrap: "wrap" }}>
               <StatusBadge status={invoice.paymentStatus} />
+              {overallReturnStatus !== "NOT_RETURNED" && (
+                <StatusBadge status={overallReturnStatus} />
+              )}
               {invoice.emailStatus === "SENT" && (
                 <span className="badge badge-paid" title={`Sent on ${formatDate(invoice.emailSentAt)}`}>
                   <Mail size={11} />
@@ -471,6 +523,194 @@ export default function InvoiceDetails() {
           </div>
         </div>
       </div>
+
+      {/* Return & Replacement Breakdown Section */}
+      <div className="card" style={{ marginBottom: "30px" }}>
+        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <RotateCcw size={18} color="#2563eb" />
+              <h3 className="card-title">Product Returns & Status</h3>
+            </div>
+            <div className="card-subtitle">
+              Return status per billed item and refund audit trail
+            </div>
+          </div>
+
+          {canReturnProducts && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => setReturnModalOpen(true)}
+              style={{ backgroundColor: "#2563eb" }}
+            >
+              <RotateCcw size={14} />
+              <span>Process Return</span>
+            </button>
+          )}
+        </div>
+
+        {/* Item Return Breakdown Table */}
+        <div className="table-container" style={{ marginBottom: returnsList.length > 0 ? "20px" : "0" }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th style={{ textAlign: "center" }}>Sold Qty</th>
+                <th style={{ textAlign: "center" }}>Returned Qty</th>
+                <th style={{ textAlign: "center" }}>Returnable Qty</th>
+                <th style={{ textAlign: "center" }}>Status</th>
+                <th style={{ textAlign: "right" }}>Refund Amount</th>
+                <th style={{ textAlign: "center" }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itemReturnStatuses.length > 0 ? (
+                itemReturnStatuses.map((it, idx) => (
+                  <tr key={it.laptopId || idx}>
+                    <td>
+                      <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "13px" }}>
+                        {it.brand} {it.model}
+                      </div>
+                      <div style={{ fontSize: "11.5px", color: "#64748b", fontFamily: "var(--font-mono)" }}>
+                        S/N: {it.serialNumber || "N/A"}
+                      </div>
+                    </td>
+                    <td style={{ textAlign: "center", fontWeight: 600 }}>{it.soldQuantity || 1}</td>
+                    <td style={{ textAlign: "center", fontWeight: 600, color: it.returnedQuantity > 0 ? "#dc2626" : "#64748b" }}>
+                      {it.returnedQuantity || 0}
+                    </td>
+                    <td style={{ textAlign: "center", fontWeight: 700, color: it.remainingReturnableQty > 0 ? "#16a34a" : "#94a3b8" }}>
+                      {it.remainingReturnableQty || 0}
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      <StatusBadge status={it.returnStatus || "NOT_RETURNED"} />
+                    </td>
+                    <td style={{ textAlign: "right", fontWeight: 700, color: "#0f172a" }}>
+                      {it.refundAmount > 0 ? formatCurrency(it.refundAmount) : "₹0"}
+                    </td>
+                    <td style={{ textAlign: "center" }}>
+                      {it.remainingReturnableQty > 0 ? (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: "3px 8px", fontSize: "11.5px" }}
+                          onClick={() => setReturnModalOpen(true)}
+                        >
+                          Return
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: "11.5px", color: "#94a3b8" }}>Completed</span>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                items.map((item, idx) => {
+                  const l = item.laptop || {};
+                  return (
+                    <tr key={idx}>
+                      <td>
+                        <div style={{ fontWeight: 700, color: "#0f172a", fontSize: "13px" }}>
+                          {l.brand} {l.model}
+                        </div>
+                        <div style={{ fontSize: "11.5px", color: "#64748b", fontFamily: "var(--font-mono)" }}>
+                          S/N: {l.serialNumber || "N/A"}
+                        </div>
+                      </td>
+                      <td style={{ textAlign: "center", fontWeight: 600 }}>1</td>
+                      <td style={{ textAlign: "center", fontWeight: 600, color: "#64748b" }}>0</td>
+                      <td style={{ textAlign: "center", fontWeight: 700, color: "#16a34a" }}>1</td>
+                      <td style={{ textAlign: "center" }}>
+                        <StatusBadge status="NOT_RETURNED" />
+                      </td>
+                      <td style={{ textAlign: "right", fontWeight: 700 }}>₹0</td>
+                      <td style={{ textAlign: "center" }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ padding: "3px 8px", fontSize: "11.5px" }}
+                          onClick={() => setReturnModalOpen(true)}
+                        >
+                          Return
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Return Transactions Audit Trail */}
+        {returnsList.length > 0 && (
+          <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "16px" }}>
+            <h4 style={{ fontSize: "12px", fontWeight: 700, textTransform: "uppercase", color: "#64748b", marginBottom: "12px" }}>
+              Return Transactions Audit History ({returnsList.length})
+            </h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {returnsList.map((ret, rIdx) => (
+                <div
+                  key={ret._id || rIdx}
+                  style={{
+                    backgroundColor: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                    padding: "12px 16px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: "10px"
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: "13.5px", color: "#0f172a" }}>
+                      {ret.productName || "Product"}
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#64748b", display: "flex", gap: "12px", marginTop: "2px" }}>
+                      <span>S/N: <strong>{ret.serialNumber || "N/A"}</strong></span>
+                      <span>Returned Qty: <strong>{ret.returnedQuantity || 1} Unit</strong></span>
+                      <span>Date: <strong>{formatDateTime(ret.returnedAt || ret.createdAt)}</strong></span>
+                    </div>
+                    {ret.reason && (
+                      <div style={{ fontSize: "12px", color: "#475569", marginTop: "4px", fontStyle: "italic" }}>
+                        Reason: "{ret.reason}"
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: "11px", color: "#64748b", textTransform: "uppercase", fontWeight: 700 }}>
+                      Customer Refund
+                    </div>
+                    <div style={{ fontSize: "15px", fontWeight: 800, color: "#dc2626" }}>
+                      {formatCurrency(ret.refundAmount)}
+                    </div>
+                    <div style={{ fontSize: "11px", color: "#059669", fontWeight: 600, marginTop: "2px" }}>
+                      Restored to Inventory
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Return Modal */}
+      {returnModalOpen && (
+        <ReturnModal
+          isOpen={returnModalOpen}
+          onClose={() => setReturnModalOpen(false)}
+          invoice={invoice}
+          onSuccess={() => {
+            fetchInvoiceDetails();
+          }}
+          showToast={showToast}
+        />
+      )}
 
       {/* Toast */}
       {toast && (

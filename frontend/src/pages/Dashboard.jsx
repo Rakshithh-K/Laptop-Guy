@@ -210,7 +210,7 @@ export default function Dashboard() {
         <StatCard
           title="Profit"
           value={displayAmount(metrics.totalProfit || 0)}
-          sub="Click for monthly analytics →"
+          sub="Net profit after returns · View Analytics →"
           badge="Analytics"
           icon={TrendingUp}
           iconBg="#ecfdf5"

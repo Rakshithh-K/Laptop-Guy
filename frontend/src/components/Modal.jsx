@@ -8,8 +8,16 @@ export default function Modal({ isOpen, onClose, title, children, size = "md" })
         onClose();
       }
     };
+
+    if (isOpen) {
+      document.body.style.overflow = "hidden";
+    }
+
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = "unset";
+      window.removeEventListener("keydown", handleKeyDown);
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -26,6 +34,7 @@ export default function Modal({ isOpen, onClose, title, children, size = "md" })
             type="button" 
             className="btn btn-secondary btn-sm" 
             onClick={onClose}
+            aria-label="Close modal"
             style={{ padding: "4px 8px", borderRadius: "6px" }}
           >
             <X size={16} />

@@ -1,6 +1,7 @@
 const Laptop = require("../models/Laptop");
 const Invoice = require("../models/Invoice");
 const Customer = require("../models/Customer");
+const Return = require("../models/Return");
 
 const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const FULL_MONTH_NAMES = [
@@ -72,10 +73,13 @@ const getDashboardStats = async (req, res, next) => {
             .populate("items.laptop")
             .populate("laptop");
 
+        // Returns metrics
+        const allReturns = await Return.find();
+
         let totalSales = 0;
         let totalPaid = 0;
         let pendingPayments = 0;
-        let totalProfit = 0;
+        let grossSalesProfit = 0;
 
         const startOfToday = new Date();
         startOfToday.setHours(0, 0, 0, 0);
@@ -83,8 +87,8 @@ const getDashboardStats = async (req, res, next) => {
         let todaySales = 0;
 
         allInvoices.forEach(inv => {
-            const amount = inv.totalAmount || 0;
-            const paid = inv.amountPaid || 0;
+            const amount = Number(inv.totalAmount) || 0;
+            const paid = Number(inv.amountPaid) || 0;
             totalSales += amount;
             totalPaid += paid;
             
@@ -96,8 +100,30 @@ const getDashboardStats = async (req, res, next) => {
             }
 
             const { profit } = getInvoiceItemMetrics(inv);
-            totalProfit += profit;
+            grossSalesProfit += profit;
         });
+
+        // Compute returns impact on profit
+        // profitImpact = purchasePrice - refundAmount
+        let totalRefunds = 0;
+        let totalReturnCost = 0;
+        let totalReturnProfitImpact = 0;
+        let totalReturnedUnits = 0;
+
+        allReturns.forEach(r => {
+            const refund = Number(r.refundAmount) || 0;
+            const cost = Number(r.purchasePrice) || 0;
+            const impact = (r.profitImpact !== undefined) ? Number(r.profitImpact) : (cost - refund);
+            const qty = Number(r.returnedQuantity) || 1;
+
+            totalRefunds += refund;
+            totalReturnCost += cost;
+            totalReturnProfitImpact += impact;
+            totalReturnedUnits += qty;
+        });
+
+        // Net profit after returns
+        const totalNetProfit = grossSalesProfit + totalReturnProfitImpact;
 
         // 5 most recent invoices (explicitly exclude purchasePrice from populated laptops)
         const recentInvoices = await Invoice.find()
@@ -127,10 +153,15 @@ const getDashboardStats = async (req, res, next) => {
                 availableLaptops,
                 soldLaptops,
                 totalCustomers,
-                totalSales,
-                todaySales,
-                pendingPayments,
-                totalProfit: Math.round(totalProfit),
+                totalSales: Math.round(totalSales),
+                todaySales: Math.round(todaySales),
+                pendingPayments: Math.round(pendingPayments),
+                grossSalesProfit: Math.round(grossSalesProfit),
+                totalProfit: Math.round(totalNetProfit), // Net profit after returns
+                totalRefunds: Math.round(totalRefunds),
+                totalReturnCost: Math.round(totalReturnCost),
+                totalReturnedUnits,
+                totalReturnsCount: allReturns.length,
                 stockPurchaseValue: Math.round(stockPurchaseValue),
                 stockSellingValue: Math.round(stockSellingValue),
                 totalInvestment: Math.round(totalHistoricalInvestment)
@@ -143,7 +174,7 @@ const getDashboardStats = async (req, res, next) => {
     }
 };
 
-// @desc    Get detailed profit analytics and month-wise profit distribution
+// @desc    Get detailed profit analytics and month-wise profit distribution accounting for returns
 // @route   GET /api/dashboard/profit
 const getProfitAnalytics = async (req, res, next) => {
     try {
@@ -153,17 +184,21 @@ const getProfitAnalytics = async (req, res, next) => {
             .populate("laptop")
             .sort({ createdAt: 1 });
 
-        let overallProfit = 0;
+        // Fetch all returns
+        const allReturns = await Return.find().sort({ returnedAt: 1, createdAt: 1 });
+
+        let grossSalesProfit = 0;
         let totalSoldUnits = 0;
         let totalRevenue = 0;
 
         const monthMap = new Map();
 
+        // 1. Process Invoices (Sales Profit attributed to invoice creation month)
         allInvoices.forEach(inv => {
             const { profit, itemsCount } = getInvoiceItemMetrics(inv);
             const amount = Number(inv.totalAmount) || 0;
 
-            overallProfit += profit;
+            grossSalesProfit += profit;
             totalSoldUnits += itemsCount;
             totalRevenue += amount;
 
@@ -176,21 +211,75 @@ const getProfitAnalytics = async (req, res, next) => {
                 monthMap.set(monthKey, {
                     year,
                     monthIndex,
-                    profit: 0,
+                    grossSalesProfit: 0,
                     soldUnits: 0,
                     revenue: 0,
-                    invoiceCount: 0
+                    invoiceCount: 0,
+                    refunds: 0,
+                    returnCost: 0,
+                    returnProfitImpact: 0,
+                    returnedUnits: 0,
+                    returnCount: 0
                 });
             }
 
             const current = monthMap.get(monthKey);
-            current.profit += profit;
+            current.grossSalesProfit += profit;
             current.soldUnits += itemsCount;
             current.revenue += amount;
             current.invoiceCount += 1;
         });
 
-        // Build continuous chronological timeline
+        // 2. Process Returns (Return Impact attributed to return date month)
+        let totalRefunds = 0;
+        let totalReturnCost = 0;
+        let totalReturnProfitImpact = 0;
+        let totalReturnedUnits = 0;
+
+        allReturns.forEach(r => {
+            const refund = Number(r.refundAmount) || 0;
+            const cost = Number(r.purchasePrice) || 0;
+            const impact = (r.profitImpact !== undefined) ? Number(r.profitImpact) : (cost - refund);
+            const qty = Number(r.returnedQuantity) || 1;
+
+            totalRefunds += refund;
+            totalReturnCost += cost;
+            totalReturnProfitImpact += impact;
+            totalReturnedUnits += qty;
+
+            const returnDate = r.returnedAt ? new Date(r.returnedAt) : new Date(r.createdAt || Date.now());
+            const year = returnDate.getFullYear();
+            const monthIndex = returnDate.getMonth();
+            const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+
+            if (!monthMap.has(monthKey)) {
+                monthMap.set(monthKey, {
+                    year,
+                    monthIndex,
+                    grossSalesProfit: 0,
+                    soldUnits: 0,
+                    revenue: 0,
+                    invoiceCount: 0,
+                    refunds: 0,
+                    returnCost: 0,
+                    returnProfitImpact: 0,
+                    returnedUnits: 0,
+                    returnCount: 0
+                });
+            }
+
+            const current = monthMap.get(monthKey);
+            current.refunds += refund;
+            current.returnCost += cost;
+            current.returnProfitImpact += impact;
+            current.returnedUnits += qty;
+            current.returnCount += 1;
+        });
+
+        // Net cumulative profit
+        const overallNetProfit = grossSalesProfit + totalReturnProfitImpact;
+
+        // 3. Build continuous chronological timeline
         let monthlyProfit = [];
 
         if (monthMap.size > 0) {
@@ -203,7 +292,7 @@ const getProfitAnalytics = async (req, res, next) => {
 
             const [latestYear, latestMonth] = sortedKeys[sortedKeys.length - 1].split("-").map(Number);
             
-            // Span up to whichever is later: current date or latest invoice
+            // Span up to whichever is later: current date or latest record
             const endYear = Math.max(currentYear, latestYear);
             const endMonth = (endYear === latestYear && endYear === currentYear)
                 ? Math.max(currentMonth, latestMonth)
@@ -217,6 +306,17 @@ const getProfitAnalytics = async (req, res, next) => {
                 const mIndex = curM - 1;
                 const existing = monthMap.get(key);
 
+                const mGrossProfit = existing ? existing.grossSalesProfit : 0;
+                const mRefunds = existing ? existing.refunds : 0;
+                const mReturnCost = existing ? existing.returnCost : 0;
+                const mReturnImpact = existing ? existing.returnProfitImpact : 0;
+                const mNetProfit = mGrossProfit + mReturnImpact;
+                const mRevenue = existing ? existing.revenue : 0;
+                const mSoldUnits = existing ? existing.soldUnits : 0;
+                const mReturnedUnits = existing ? existing.returnedUnits : 0;
+                const mInvoiceCount = existing ? existing.invoiceCount : 0;
+                const mReturnCount = existing ? existing.returnCount : 0;
+
                 monthlyProfit.push({
                     key,
                     month: `${MONTH_NAMES[mIndex]} ${curY}`,
@@ -224,10 +324,18 @@ const getProfitAnalytics = async (req, res, next) => {
                     shortMonth: MONTH_NAMES[mIndex],
                     year: curY,
                     monthNumber: curM,
-                    profit: existing ? Math.round(existing.profit) : 0,
-                    soldUnits: existing ? existing.soldUnits : 0,
-                    revenue: existing ? Math.round(existing.revenue) : 0,
-                    invoiceCount: existing ? existing.invoiceCount : 0
+                    profit: Math.round(mNetProfit), // Net profit after returns
+                    grossSalesProfit: Math.round(mGrossProfit),
+                    refunds: Math.round(mRefunds),
+                    returnCost: Math.round(mReturnCost),
+                    returnProfitImpact: Math.round(mReturnImpact),
+                    soldUnits: mSoldUnits,
+                    returnedUnits: mReturnedUnits,
+                    netSoldUnits: Math.max(0, mSoldUnits - mReturnedUnits),
+                    revenue: Math.round(mRevenue),
+                    netRevenue: Math.round(mRevenue - mRefunds),
+                    invoiceCount: mInvoiceCount,
+                    returnCount: mReturnCount
                 });
 
                 curM += 1;
@@ -240,9 +348,16 @@ const getProfitAnalytics = async (req, res, next) => {
 
         res.status(200).json({
             success: true,
-            overallProfit: Math.round(overallProfit),
+            overallProfit: Math.round(overallNetProfit),
+            grossSalesProfit: Math.round(grossSalesProfit),
+            totalRefunds: Math.round(totalRefunds),
+            totalReturnCost: Math.round(totalReturnCost),
             totalSoldUnits,
+            totalReturnedUnits,
+            netSoldUnits: Math.max(0, totalSoldUnits - totalReturnedUnits),
             totalRevenue: Math.round(totalRevenue),
+            netRevenue: Math.round(totalRevenue - totalRefunds),
+            totalReturnsCount: allReturns.length,
             monthlyProfit
         });
     } catch (error) {

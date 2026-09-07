@@ -8,6 +8,7 @@ import {
   ReceiptText,
   FileSpreadsheet,
   Users,
+  RotateCcw,
   ShieldCheck,
   LogOut,
   X
@@ -26,6 +27,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
     { to: "/inventory", label: "Inventory", icon: Laptop },
     { to: "/create-bill", label: "Create Bill", icon: ReceiptText },
     { to: "/invoices", label: "Invoices", icon: FileSpreadsheet },
+    { to: "/returns", label: "Return History", icon: RotateCcw },
     { to: "/customers", label: "Customers", icon: Users },
   ];
 

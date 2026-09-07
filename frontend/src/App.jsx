@@ -12,6 +12,7 @@ import Inventory from "./pages/Inventory";
 import CreateBill from "./pages/CreateBill";
 import Invoices from "./pages/Invoices";
 import InvoiceDetails from "./pages/InvoiceDetails";
+import ReturnHistory from "./pages/ReturnHistory";
 import Customers from "./pages/Customers";
 
 // Layout wrapper for authenticated dashboard routes
@@ -126,6 +127,17 @@ export default function App() {
               <ProtectedRoute>
                 <AppLayout>
                   <InvoiceDetails />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/returns"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <ReturnHistory />
                 </AppLayout>
               </ProtectedRoute>
             }

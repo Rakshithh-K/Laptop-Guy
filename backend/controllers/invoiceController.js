@@ -1,6 +1,7 @@
 const Invoice = require("../models/Invoice");
 const Laptop = require("../models/Laptop");
 const Customer = require("../models/Customer");
+const Return = require("../models/Return");
 const { generateInvoicePdf } = require("../services/pdfService");
 const { sendInvoiceEmail } = require("../services/emailService");
 
@@ -300,7 +301,87 @@ const getInvoiceById = async (req, res, next) => {
             });
         }
 
-        res.status(200).json(normalizeInvoice(invoice));
+        const normalized = normalizeInvoice(invoice);
+
+        // Fetch returns for this invoice
+        const returns = await Return.find({ invoice: invoice._id })
+            .select("-purchasePrice")
+            .sort({ returnedAt: -1 });
+
+        const invoiceDiscount = Math.max(0, Number(normalized.discount) || 0);
+        const itemsSubtotal = (normalized.items || []).reduce((sum, it) => sum + (Number(it.sellingPrice) || 0), 0);
+
+        let totalInvoiceRefunded = 0;
+        let totalInvoiceReturnedUnits = 0;
+
+        const itemReturnStatuses = (normalized.items || []).map(item => {
+            const l = item.laptop || {};
+            const laptopId = l._id ? l._id.toString() : (l.toString ? l.toString() : "");
+            const soldQty = item.quantity ? Number(item.quantity) : 1;
+            const itemPrice = Number(item.sellingPrice) || 0;
+
+            let itemDiscount = 0;
+            if (itemsSubtotal > 0 && invoiceDiscount > 0) {
+                itemDiscount = (invoiceDiscount * itemPrice) / itemsSubtotal;
+            }
+            const finalSellingPriceAfterDiscount = Math.max(0, itemPrice - itemDiscount);
+
+            const itemReturns = returns.filter(r => {
+                const rLaptopId = r.laptop?._id ? r.laptop._id.toString() : r.laptop?.toString();
+                return rLaptopId === laptopId;
+            });
+
+            const returnedQty = itemReturns.reduce((sum, r) => sum + (Number(r.returnedQuantity) || 0), 0);
+            const remainingReturnableQty = Math.max(0, soldQty - returnedQty);
+            const itemTotalRefund = itemReturns.reduce((sum, r) => sum + (Number(r.refundAmount) || 0), 0);
+
+            totalInvoiceRefunded += itemTotalRefund;
+            totalInvoiceReturnedUnits += returnedQty;
+
+            let returnStatus = "NOT_RETURNED";
+            if (returnedQty >= soldQty) {
+                returnStatus = "FULLY_RETURNED";
+            } else if (returnedQty > 0) {
+                returnStatus = "PARTIALLY_RETURNED";
+            }
+
+            return {
+                laptopId,
+                brand: l.brand || "",
+                model: l.model || "",
+                serialNumber: l.serialNumber || "",
+                processor: l.processor || "",
+                ram: l.ram || "",
+                storage: l.storage || "",
+                condition: l.condition || "",
+                soldQuantity: soldQty,
+                returnedQuantity: returnedQty,
+                remainingReturnableQty,
+                originalSellingPrice: itemPrice,
+                originalSellingPriceAfterDiscount: finalSellingPriceAfterDiscount,
+                refundAmount: itemTotalRefund,
+                returnStatus,
+                returns: itemReturns
+            };
+        });
+
+        const allItemsFullyReturned = itemReturnStatuses.length > 0 && itemReturnStatuses.every(it => it.returnStatus === "FULLY_RETURNED");
+        const anyItemReturned = itemReturnStatuses.some(it => it.returnedQuantity > 0);
+
+        let overallReturnStatus = "NOT_RETURNED";
+        if (allItemsFullyReturned) {
+            overallReturnStatus = "FULLY_RETURNED";
+        } else if (anyItemReturned) {
+            overallReturnStatus = "PARTIALLY_RETURNED";
+        }
+
+        normalized.returns = returns;
+        normalized.itemReturnStatuses = itemReturnStatuses;
+        normalized.overallReturnStatus = overallReturnStatus;
+        normalized.totalRefunded = Math.round(totalInvoiceRefunded);
+        normalized.totalReturnedUnits = totalInvoiceReturnedUnits;
+
+        res.status(200).json(normalized);
     } catch (error) {
         next(error);
     }
