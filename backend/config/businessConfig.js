@@ -2,8 +2,8 @@
 module.exports = {
     businessName: "LAPTOP_GUY LAPTOPS AND COMPUTERS",
     tagline: "Certified Pre-Owned Laptops & Workstations",
-    address: "#667, Kumbarageri 3rd cross, C H Mohalla, Mysore - 57004",
-    phone: "+91 7795330943/ +91 80 2345 6789",
+    address: "#667, Kumbarageri 3rd cross, C H Mohalla, Mysore - 570004",
+    phone: "+91 7795330943/ +91 8217482089",
     email: "laptopguysales@gmail.com",
     website: "www.nextgenlaptops.com",
     //gstin: "29AAAAA0000A1Z5",
