@@ -44,3 +44,13 @@ export const deleteInvoice = async (id) => {
     const response = await apiClient.delete(`/invoices/${id}`);
     return response.data;
 };
+
+export const sendPaymentReminder = async (id) => {
+    const response = await apiClient.post(`/invoices/${id}/remind`);
+    return response.data;
+};
+
+export const recordPayment = async (id, paymentData) => {
+    const response = await apiClient.post(`/invoices/${id}/payment`, paymentData);
+    return response.data;
+};

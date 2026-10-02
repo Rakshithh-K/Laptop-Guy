@@ -12,6 +12,10 @@ import Inventory from "./pages/Inventory";
 import CreateBill from "./pages/CreateBill";
 import Invoices from "./pages/Invoices";
 import InvoiceDetails from "./pages/InvoiceDetails";
+import PendingPayments from "./pages/PendingPayments";
+import Quotations from "./pages/Quotations";
+import CreateQuotation from "./pages/CreateQuotation";
+import QuotationDetails from "./pages/QuotationDetails";
 import ReturnHistory from "./pages/ReturnHistory";
 import Customers from "./pages/Customers";
 
@@ -127,6 +131,50 @@ export default function App() {
               <ProtectedRoute>
                 <AppLayout>
                   <InvoiceDetails />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/pending-payments"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <PendingPayments />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/quotations"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <Quotations />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/create-quotation"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <CreateQuotation />
+                </AppLayout>
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/quotations/:id"
+            element={
+              <ProtectedRoute>
+                <AppLayout>
+                  <QuotationDetails />
                 </AppLayout>
               </ProtectedRoute>
             }

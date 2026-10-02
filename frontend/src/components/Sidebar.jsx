@@ -11,7 +11,9 @@ import {
   RotateCcw,
   ShieldCheck,
   LogOut,
-  X
+  X,
+  FileText,
+  Clock
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import logoImg from "../assets/logo.jpeg";
@@ -27,6 +29,8 @@ export default function Sidebar({ isOpen = false, onClose }) {
     { to: "/inventory", label: "Inventory", icon: Laptop },
     { to: "/create-bill", label: "Create Bill", icon: ReceiptText },
     { to: "/invoices", label: "Invoices", icon: FileSpreadsheet },
+    { to: "/pending-payments", label: "Pending Payments", icon: Clock },
+    { to: "/quotations", label: "Quotations", icon: FileText },
     { to: "/returns", label: "Return History", icon: RotateCcw },
     { to: "/customers", label: "Customers", icon: Users },
   ];

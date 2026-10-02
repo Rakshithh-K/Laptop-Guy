@@ -6,7 +6,9 @@ const {
     getInvoiceById,
     getInvoicePdf,
     sendInvoice,
-    deleteInvoice
+    deleteInvoice,
+    sendPaymentReminder,
+    recordPayment
 } = require("../controllers/invoiceController");
 const { getInvoiceReturns } = require("../controllers/returnController");
 
@@ -26,5 +28,11 @@ router.route("/:id/pdf")
 
 router.route("/:id/send")
     .post(sendInvoice);
+
+router.route("/:id/remind")
+    .post(sendPaymentReminder);
+
+router.route("/:id/payment")
+    .post(recordPayment);
 
 module.exports = router;

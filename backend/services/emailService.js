@@ -894,9 +894,290 @@ If you did not request this, please disregard this email.
 };
 
 /**
+ * Sends Payment Reminder Email with Outstanding Balance Details and optional Invoice PDF Attachment
+ */
+const sendPaymentReminderEmail = async ({
+  to,
+  customerName,
+  invoiceNumber,
+  invoice,
+  pdfBuffer
+}) => {
+  console.log(
+    `[EmailService] Starting payment reminder email for invoice #${invoiceNumber} to ${to}`
+  );
+
+  if (!to || !to.trim()) {
+    throw new Error("Customer email address is required to send payment reminder.");
+  }
+
+  const apiKey = (process.env.BREVO_API_KEY || "").trim();
+  if (!apiKey) {
+    throw new Error(
+      "BREVO_API_KEY is missing. Please add BREVO_API_KEY to your environment variables."
+    );
+  }
+
+  const totalAmount = Number(invoice.totalAmount) || 0;
+  const amountPaid = Number(invoice.amountPaid) || 0;
+  const balance = Math.max(0, totalAmount - amountPaid);
+
+  if (balance <= 0) {
+    throw new Error(`Invoice #${invoiceNumber} is already fully paid. No pending balance.`);
+  }
+
+  const businessName = businessConfig.businessName || "Laptop_Guy Laptops & Computers";
+  const businessPhone = businessConfig.phone || "+91 7795330943";
+  const businessEmail = businessConfig.email || "laptopguysales@gmail.com";
+  const invoiceDate = formatDate(invoice.createdAt);
+
+  const items = invoice.items && invoice.items.length > 0
+    ? invoice.items
+    : invoice.laptop
+      ? [{ laptop: invoice.laptop, sellingPrice: invoice.sellingPrice || invoice.totalAmount }]
+      : [];
+
+  const itemsHtml = items.map((item, idx) => {
+    const l = item.laptop || {};
+    return `
+      <tr style="border-bottom: 1px solid #e2e8f0;">
+        <td style="padding: 8px 0; color: #0f172a; font-weight: 600;">
+          ${idx + 1}. ${l.brand || ""} ${l.model || "Laptop"}
+          <div style="font-size: 11.5px; color: #64748b; font-family: monospace;">
+            S/N: ${l.serialNumber || "N/A"}${l.processor ? ` | ${l.processor}` : ""}${l.ram ? ` | ${l.ram}` : ""}
+          </div>
+        </td>
+        <td style="padding: 8px 0; text-align: right; font-weight: 700; color: #0f172a; vertical-align: top;">
+          ${formatCurrency(item.sellingPrice || l.sellingPrice || 0)}
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: #1e293b;
+    margin: 0;
+    padding: 0;
+    background-color: #f8fafc;
+  }
+  .wrapper {
+    max-width: 600px;
+    margin: 20px auto;
+    background: #ffffff;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  }
+  .header {
+    background: #0f172a;
+    padding: 24px 32px;
+    color: #ffffff;
+  }
+  .header h1 {
+    margin: 0 0 4px 0;
+    font-size: 20px;
+    font-weight: 800;
+  }
+  .header p {
+    margin: 0;
+    font-size: 12px;
+    color: #f59e0b;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-weight: 700;
+  }
+  .content {
+    padding: 32px;
+  }
+  .greeting {
+    font-size: 16px;
+    font-weight: 700;
+    color: #0f172a;
+    margin-bottom: 12px;
+  }
+  .intro {
+    font-size: 14px;
+    color: #475569;
+    margin-bottom: 20px;
+  }
+  .balance-card {
+    background: #fffbeb;
+    border: 2px solid #f59e0b;
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  .balance-title {
+    font-size: 12px;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: #b45309;
+    letter-spacing: 0.5px;
+  }
+  .balance-amount {
+    font-size: 32px;
+    font-weight: 900;
+    color: #dc2626;
+    margin: 6px 0;
+  }
+  .balance-meta {
+    font-size: 13px;
+    color: #78350f;
+  }
+  .summary-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+  }
+  .bank-details {
+    background: #f1f5f9;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    border: 1px dashed #cbd5e1;
+  }
+  .footer {
+    background: #f1f5f9;
+    padding: 20px 32px;
+    border-top: 1px solid #e2e8f0;
+    font-size: 12px;
+    color: #64748b;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div class="wrapper">
+    <div class="header">
+      <h1>${businessName}</h1>
+      <p>⚠️ Payment Reminder & Balance Notice</p>
+    </div>
+
+    <div class="content">
+      <div class="greeting">
+        Hello ${customerName || "Valued Customer"},
+      </div>
+
+      <p class="intro">
+        We hope you are enjoying your laptop purchase. This is a friendly reminder regarding the outstanding balance of <strong>${formatCurrency(balance)}</strong> for Invoice <strong>#${invoiceNumber}</strong> issued on <strong>${invoiceDate}</strong>.
+      </p>
+
+      <!-- Prominent Balance Due Card -->
+      <div class="balance-card">
+        <div class="balance-title">Outstanding Balance Due</div>
+        <div class="balance-amount">${formatCurrency(balance)}</div>
+        <div class="balance-meta">
+          Total Bill: <strong>${formatCurrency(totalAmount)}</strong> &nbsp;|&nbsp; Amount Paid: <strong>${formatCurrency(amountPaid)}</strong>
+        </div>
+      </div>
+
+      <!-- Invoice Products Summary -->
+      <div class="summary-card">
+        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #64748b; margin-bottom: 8px;">
+          Billed Laptop Details
+        </div>
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Payment Modes & Bank Details -->
+      <div class="bank-details">
+        <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #0f172a; margin-bottom: 8px;">
+          How to Pay & Settle Balance
+        </div>
+        <div style="font-size: 13px; color: #334155; line-height: 1.6;">
+          <div><strong>UPI ID:</strong> ${businessConfig.bankDetails?.upiId || "nextgenlaptops@hdfcbank"}</div>
+          <div><strong>Google Pay / PhonePe:</strong> ${businessPhone}</div>
+          <div><strong>Bank:</strong> ${businessConfig.bankDetails?.bankName || "HDFC Bank"}</div>
+          <div><strong>Account No:</strong> ${businessConfig.bankDetails?.accountNumber || "50200012345678"}</div>
+          <div><strong>IFSC Code:</strong> ${businessConfig.bankDetails?.ifscCode || "HDFC0001234"}</div>
+        </div>
+      </div>
+
+      <p style="font-size: 13px; color: #64748b; line-height: 1.5;">
+        <em>Note: If you have already completed this payment, please reply to this email with your transaction ID / payment receipt or contact us at ${businessPhone} so we can update our records.</em>
+      </p>
+    </div>
+
+    <div class="footer">
+      <strong>${businessName}</strong><br />
+      ${businessConfig.address}<br />
+      Contact: ${businessEmail} | Phone: ${businessPhone}
+    </div>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const plainText = `
+Hello ${customerName || "Valued Customer"},
+
+This is a payment reminder regarding the pending balance of ${formatCurrency(balance)} for Invoice #${invoiceNumber}.
+
+Invoice Details:
+- Invoice No: ${invoiceNumber}
+- Date: ${invoiceDate}
+- Total Bill Amount: ${formatCurrency(totalAmount)}
+- Amount Paid: ${formatCurrency(amountPaid)}
+- Outstanding Balance: ${formatCurrency(balance)}
+
+Payment Methods:
+- UPI ID: ${businessConfig.bankDetails?.upiId || "nextgenlaptops@hdfcbank"}
+- PhonePe / GPay: ${businessPhone}
+- Bank: ${businessConfig.bankDetails?.bankName || "HDFC Bank"}
+- Account No: ${businessConfig.bankDetails?.accountNumber || "50200012345678"}
+- IFSC: ${businessConfig.bankDetails?.ifscCode || "HDFC0001234"}
+
+If you have already paid, please reply with your transaction reference. Thank you!
+${businessName}
+  `.trim();
+
+  const brevoClient = new BrevoClient({ apiKey });
+  const senderEmail = (process.env.BREVO_FROM_EMAIL || businessEmail).trim();
+  const senderName = (process.env.BREVO_FROM_NAME || businessName).trim();
+
+  const emailPayload = {
+    sender: { name: senderName, email: senderEmail },
+    to: [{ email: to.trim(), name: customerName || "Customer" }],
+    subject: `Payment Reminder: Pending Balance of ${formatCurrency(balance)} for Invoice #${invoiceNumber} - ${businessName}`,
+    htmlContent: emailHtml,
+    textContent: plainText
+  };
+
+  if (pdfBuffer && Buffer.isBuffer(pdfBuffer) && pdfBuffer.length > 0) {
+    emailPayload.attachment = [
+      {
+        name: `Invoice-${invoiceNumber}.pdf`,
+        content: pdfBuffer.toString("base64")
+      }
+    ];
+  }
+
+  const result = await brevoClient.transactionalEmails.sendTransacEmail(emailPayload);
+  console.log(`[EmailService] Payment reminder email sent successfully to ${to.trim()}`);
+  return result;
+};
+
+/**
  * Export
  */
 module.exports = {
   sendInvoiceEmail,
-  sendOtpEmail
+  sendOtpEmail,
+  sendPaymentReminderEmail
 };

@@ -3,7 +3,7 @@ const Laptop = require("../models/Laptop");
 const Customer = require("../models/Customer");
 const Return = require("../models/Return");
 const { generateInvoicePdf } = require("../services/pdfService");
-const { sendInvoiceEmail } = require("../services/emailService");
+const { sendInvoiceEmail, sendPaymentReminderEmail } = require("../services/emailService");
 
 // Helper to normalize legacy invoices into multi-item structure
 const normalizeInvoice = (invoiceDoc) => {
@@ -243,7 +243,9 @@ const getInvoices = async (req, res, next) => {
         const { search, paymentStatus } = req.query;
         let query = {};
 
-        if (paymentStatus && paymentStatus !== "ALL") {
+        if (paymentStatus === "PENDING_ALL" || paymentStatus === "UNPAID") {
+            query.paymentStatus = { $in: ["PENDING", "PARTIAL"] };
+        } else if (paymentStatus && paymentStatus !== "ALL") {
             query.paymentStatus = paymentStatus.toUpperCase();
         }
 
@@ -582,11 +584,165 @@ const deleteInvoice = async (req, res, next) => {
     }
 };
 
+// @desc    Send payment reminder email with PDF attachment for pending balance
+// @route   POST /api/invoices/:id/remind
+const sendPaymentReminder = async (req, res, next) => {
+    const invoiceId = req.params.id;
+    let invoice;
+    try {
+        invoice = await Invoice.findById(invoiceId)
+            .populate("customer")
+            .populate("items.laptop")
+            .populate("laptop");
+
+        if (!invoice) {
+            return res.status(404).json({
+                success: false,
+                message: "Invoice not found."
+            });
+        }
+
+        const customer = invoice.customer;
+        if (!customer) {
+            return res.status(404).json({
+                success: false,
+                message: "Customer linked to this invoice was not found."
+            });
+        }
+
+        if (!customer.email || !customer.email.trim()) {
+            return res.status(400).json({
+                success: false,
+                message: "Customer does not have an email address registered."
+            });
+        }
+
+        const totalAmount = Number(invoice.totalAmount) || 0;
+        const amountPaid = Number(invoice.amountPaid) || 0;
+        const balance = Math.max(0, totalAmount - amountPaid);
+
+        if (balance <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Invoice #${invoice.invoiceNumber} is already fully settled. No pending balance.`
+            });
+        }
+
+        const normalized = normalizeInvoice(invoice);
+
+        // 1. Generate PDF buffer for attachment
+        let pdfBuffer = null;
+        try {
+            pdfBuffer = await generateInvoicePdf(normalized);
+        } catch (pdfErr) {
+            console.warn("[Invoice] Warning: Could not generate PDF for reminder attachment:", pdfErr.message);
+        }
+
+        // 2. Dispatch Payment Reminder Email
+        await sendPaymentReminderEmail({
+            to: customer.email.trim(),
+            customerName: customer.name,
+            invoiceNumber: normalized.invoiceNumber,
+            invoice: normalized,
+            pdfBuffer
+        });
+
+        // 3. Update reminder tracking
+        invoice.reminderSentAt = new Date();
+        invoice.reminderCount = (invoice.reminderCount || 0) + 1;
+        await invoice.save();
+
+        res.status(200).json({
+            success: true,
+            message: `Payment reminder email sent successfully to ${customer.email}`,
+            email: customer.email,
+            reminderSentAt: invoice.reminderSentAt,
+            reminderCount: invoice.reminderCount
+        });
+    } catch (error) {
+        console.error("[Invoice] Send payment reminder error:", error);
+        res.status(500).json({
+            success: false,
+            message: error.message || "Failed to send payment reminder email."
+        });
+    }
+};
+
+// @desc    Record partial or full payment settlement for an invoice
+// @route   POST /api/invoices/:id/payment
+const recordPayment = async (req, res, next) => {
+    try {
+        const { paymentAmount, paymentMethod, transactionId } = req.body;
+        const amount = Number(paymentAmount);
+
+        if (isNaN(amount) || amount <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Please enter a valid positive payment amount."
+            });
+        }
+
+        const invoice = await Invoice.findById(req.params.id)
+            .populate("customer")
+            .populate("items.laptop")
+            .populate("laptop");
+
+        if (!invoice) {
+            return res.status(404).json({
+                success: false,
+                message: "Invoice not found."
+            });
+        }
+
+        const totalAmount = Number(invoice.totalAmount) || 0;
+        const currentPaid = Number(invoice.amountPaid) || 0;
+        const remainingBalance = Math.max(0, totalAmount - currentPaid);
+
+        if (amount > remainingBalance) {
+            return res.status(400).json({
+                success: false,
+                message: `Payment amount (₹${amount}) exceeds remaining balance (₹${remainingBalance}).`
+            });
+        }
+
+        const newAmountPaid = currentPaid + amount;
+        invoice.amountPaid = newAmountPaid;
+
+        if (newAmountPaid >= totalAmount) {
+            invoice.paymentStatus = "PAID";
+        } else if (newAmountPaid > 0) {
+            invoice.paymentStatus = "PARTIAL";
+        }
+
+        if (paymentMethod) {
+            invoice.paymentMethod = paymentMethod.toUpperCase();
+        }
+
+        if (transactionId && transactionId.trim()) {
+            invoice.transactionId = invoice.transactionId
+                ? `${invoice.transactionId}, ${transactionId.trim()}`
+                : transactionId.trim();
+        }
+
+        await invoice.save();
+
+        res.status(200).json({
+            success: true,
+            message: `Recorded payment of ₹${amount}. New balance: ₹${Math.max(0, totalAmount - newAmountPaid)}.`,
+            invoice: normalizeInvoice(invoice)
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createInvoice,
     getInvoices,
     getInvoiceById,
     getInvoicePdf,
     sendInvoice,
-    deleteInvoice
+    deleteInvoice,
+    sendPaymentReminder,
+    recordPayment
 };

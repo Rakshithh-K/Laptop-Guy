@@ -578,11 +578,9 @@ const generateInvoiceHtml = (invoice) => {
 };
 
 /**
- * Generate PDF buffer using Puppeteer
+ * Generic helper to launch Puppeteer and render HTML to A4 PDF buffer
  */
-const generateInvoicePdf = async (invoice) => {
-    const htmlContent = generateInvoiceHtml(invoice);
-
+const renderHtmlToPdf = async (htmlContent) => {
     const launchOptions = {
         headless: "new",
         args: [
@@ -594,12 +592,10 @@ const generateInvoicePdf = async (invoice) => {
         ]
     };
 
-    // Auto-detect browser executable path if configured or present on system
     if (process.env.PUPPETEER_EXECUTABLE_PATH) {
         launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
     } else {
         const candidatePaths = [
-            // Windows common Chrome & Edge paths
             "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
             "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
             "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
@@ -608,12 +604,10 @@ const generateInvoicePdf = async (invoice) => {
                 path.join(process.env.LOCALAPPDATA, "Google\\Chrome\\Application\\chrome.exe"),
                 path.join(process.env.LOCALAPPDATA, "Microsoft\\Edge\\Application\\msedge.exe")
             ] : []),
-            // Linux / Render paths
             "/usr/bin/google-chrome-stable",
             "/usr/bin/google-chrome",
             "/usr/bin/chromium-browser",
             "/usr/bin/chromium",
-            // Mac paths
             "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
             "/Applications/Chromium.app/Contents/MacOS/Chromium",
             "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
@@ -654,7 +648,496 @@ const generateInvoicePdf = async (invoice) => {
     }
 };
 
+/**
+ * Generate PDF buffer for Invoice
+ */
+const generateInvoicePdf = async (invoice) => {
+    const htmlContent = generateInvoiceHtml(invoice);
+    return renderHtmlToPdf(htmlContent);
+};
+
+/**
+ * Generates HTML string for Quotation
+ */
+const generateQuotationHtml = (quotation) => {
+    const customer = quotation.customer || {};
+    const items = quotation.items || [];
+    const subtotal = quotation.subtotal || 0;
+    const discount = quotation.discount || 0;
+    const totalAmount = quotation.totalQuotedAmount || 0;
+    const logoBase64 = getLogoBase64();
+    const sigBase64 = getSignatureBase64();
+
+    const validUntilDate = quotation.validUntil ? formatDate(quotation.validUntil) : "7 Days from Issue";
+
+    return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quotation ${quotation.quotationNumber}</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            color: #1e293b;
+            background-color: #ffffff;
+            font-size: 13px;
+            line-height: 1.5;
+            padding: 28px 36px;
+        }
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #0f172a;
+            padding-bottom: 18px;
+            margin-bottom: 20px;
+        }
+        .business-info {
+            max-width: 60%;
+        }
+        .logo-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 6px;
+        }
+        .logo-img {
+            width: 48px;
+            height: 48px;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+        .business-name {
+            font-size: 19px;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.5px;
+        }
+        .business-tagline {
+            font-size: 11px;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .business-details {
+            font-size: 11.5px;
+            color: #475569;
+            line-height: 1.4;
+        }
+        .business-details span {
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .quotation-meta {
+            text-align: right;
+        }
+        .quotation-badge {
+            display: inline-block;
+            background: #2563eb;
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            padding: 5px 14px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        .meta-row {
+            font-size: 12px;
+            color: #475569;
+            margin-bottom: 3px;
+        }
+        .meta-row strong {
+            color: #0f172a;
+            font-size: 13px;
+        }
+        .validity-pill {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 9999px;
+            margin-top: 4px;
+            border: 1px solid #3b82f6;
+            color: #1d4ed8;
+            background-color: #eff6ff;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 22px;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px 20px;
+        }
+        .info-col h3 {
+            font-size: 11.5px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: #64748b;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 4px;
+        }
+        .info-col p {
+            font-size: 12px;
+            color: #334155;
+            margin-bottom: 3px;
+        }
+        .info-col strong {
+            color: #0f172a;
+        }
+
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .items-table th {
+            background-color: #0f172a;
+            color: #ffffff;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 10px 12px;
+            text-align: left;
+        }
+        .items-table th.text-right {
+            text-align: right;
+        }
+        .items-table th.text-center {
+            text-align: center;
+        }
+        .items-table td {
+            padding: 11px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            vertical-align: top;
+            font-size: 12px;
+        }
+        .items-table td.text-right {
+            text-align: right;
+        }
+        .items-table td.text-center {
+            text-align: center;
+        }
+        .item-name {
+            font-weight: 700;
+            color: #0f172a;
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+        .item-spec-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 4px;
+        }
+        .spec-badge {
+            background-color: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            color: #334155;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .bottom-section {
+            display: grid;
+            grid-template-columns: 1.1fr 0.9fr;
+            gap: 24px;
+            margin-bottom: 22px;
+        }
+        .terms-box {
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px 16px;
+        }
+        .terms-box h4 {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #475569;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+        .terms-box ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .terms-box li {
+            font-size: 10.5px;
+            color: #64748b;
+            margin-bottom: 3px;
+            line-height: 1.35;
+        }
+        .notes-box {
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px dashed #cbd5e1;
+            font-size: 11px;
+            color: #1e293b;
+        }
+
+        .totals-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .totals-table tr td {
+            padding: 6px 10px;
+            font-size: 12px;
+            color: #475569;
+        }
+        .totals-table tr td:last-child {
+            text-align: right;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .totals-table tr.total-row {
+            border-top: 2px solid #0f172a;
+            border-bottom: 2px solid #0f172a;
+            background-color: #f8fafc;
+        }
+        .totals-table tr.total-row td {
+            font-size: 14px;
+            font-weight: 800;
+            color: #0f172a;
+            padding: 8px 10px;
+        }
+
+        .signature-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: 24px;
+            padding-top: 14px;
+        }
+        .validity-seal {
+            border: 2px dashed #2563eb;
+            background-color: #eff6ff;
+            color: #1d4ed8;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            text-align: center;
+            max-width: 260px;
+        }
+        .signatory-box {
+            text-align: center;
+            width: 220px;
+        }
+        .sig-img {
+            max-width: 140px;
+            max-height: 55px;
+            height: auto;
+            object-fit: contain;
+            display: block;
+            margin: 0 auto 6px auto;
+        }
+        .sign-line {
+            border-top: 1px solid #0f172a;
+            margin-top: 6px;
+            padding-top: 4px;
+            font-size: 11.5px;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .sign-sub {
+            font-size: 10px;
+            color: #64748b;
+        }
+
+        .footer {
+            margin-top: 18px;
+            text-align: center;
+            font-size: 10.5px;
+            color: #94a3b8;
+            border-top: 1px solid #f1f5f9;
+            padding-top: 8px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header-container">
+        <div class="business-info">
+            <div class="logo-title">
+                ${logoBase64 ? `<img src="${logoBase64}" class="logo-img" alt="Logo" />` : ""}
+                <div class="business-name">${businessConfig.businessName}</div>
+            </div>
+            <div class="business-tagline">${businessConfig.tagline}</div>
+            <div class="business-details">
+                <div>${businessConfig.address}</div>
+                <div><span>Phone:</span> ${businessConfig.phone} &nbsp;|&nbsp; <span>Email:</span> ${businessConfig.email}</div>
+            </div>
+        </div>
+
+        <div class="quotation-meta">
+            <div class="quotation-badge">Price Quotation</div>
+            <div class="meta-row">Quotation No: <strong>${quotation.quotationNumber}</strong></div>
+            <div class="meta-row">Issue Date: <strong>${formatDate(quotation.createdAt)}</strong></div>
+            <div>
+                <span class="validity-pill">Valid Until: ${validUntilDate}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Grid -->
+    <div class="info-grid">
+        <div class="info-col">
+            <h3>Quotation Prepared For</h3>
+            <p><strong>Name:</strong> ${customer.name || "Customer"}</p>
+            <p><strong>Phone:</strong> ${customer.phone || "N/A"}</p>
+            ${customer.email ? `<p><strong>Email:</strong> ${customer.email}</p>` : ""}
+            ${customer.address ? `<p><strong>Address:</strong> ${customer.address}</p>` : ""}
+            ${customer.gstin ? `<p><strong>GSTIN:</strong> ${customer.gstin}</p>` : ""}
+        </div>
+
+        <div class="info-col">
+            <h3>Quotation Summary</h3>
+            <p><strong>Quote Status:</strong> Official Commercial Estimate</p>
+            <p><strong>Validity Period:</strong> ${quotation.validityDays || 7} Days from Date of Issue</p>
+            <p><strong>Valid Until:</strong> ${validUntilDate}</p>
+            <p><strong>Total Quoted Units:</strong> ${items.length} ${items.length === 1 ? "Product" : "Products"}</p>
+        </div>
+    </div>
+
+    <!-- Items Table -->
+    <table class="items-table">
+        <thead>
+            <tr>
+                <th style="width: 32px;" class="text-center">#</th>
+                <th>Item & Technical Specifications</th>
+                <th style="width: 120px;" class="text-right">Unit Quote (₹)</th>
+                <th style="width: 50px;" class="text-center">Qty</th>
+                <th style="width: 130px;" class="text-right">Quoted Amount (₹)</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${items.map((item, index) => {
+                const brand = item.brand || item.laptop?.brand || "";
+                const model = item.model || item.laptop?.model || "";
+                const serial = item.serialNumber || item.laptop?.serialNumber || "N/A";
+                const proc = item.processor || item.laptop?.processor || "";
+                const ram = item.ram || item.laptop?.ram || "";
+                const storage = item.storage || item.laptop?.storage || "";
+                const cond = item.condition || item.laptop?.condition || "Pre-Owned Tested";
+                const warranty = item.warranty || item.laptop?.warranty || "30 Days Hardware Warranty";
+                const price = item.quotedPrice || 0;
+
+                return `
+                    <tr>
+                        <td class="text-center" style="font-weight: 600; color: #64748b;">${index + 1}</td>
+                        <td>
+                            <div class="item-name">${brand} ${model}</div>
+                            <div class="item-spec-tags">
+                                <span class="spec-badge">S/N: ${serial}</span>
+                                ${proc ? `<span class="spec-badge">${proc}</span>` : ""}
+                                ${ram ? `<span class="spec-badge">${ram} RAM</span>` : ""}
+                                ${storage ? `<span class="spec-badge">${storage}</span>` : ""}
+                                <span class="spec-badge" style="background-color: #ecfdf5; border-color: #a7f3d0; color: #065f46;">Condition: ${cond}</span>
+                                <span class="spec-badge" style="background-color: #eff6ff; border-color: #bfdbfe; color: #1e40af;">Warranty: ${warranty}</span>
+                            </div>
+                        </td>
+                        <td class="text-right" style="font-weight: 600;">${formatCurrency(price)}</td>
+                        <td class="text-center">1</td>
+                        <td class="text-right" style="font-weight: 700; color: #0f172a;">${formatCurrency(price)}</td>
+                    </tr>
+                `;
+            }).join("")}
+        </tbody>
+    </table>
+
+    <!-- Calculation & Terms Grid -->
+    <div class="bottom-section">
+        <div class="terms-box">
+            <h4>Quotation Terms & Conditions</h4>
+            <ul>
+                <li>1. This document is a commercial price estimate and does not represent an invoice or bill of sale.</li>
+                <li>2. Quoted prices are valid for ${quotation.validityDays || 7} days from the issue date and subject to physical stock availability.</li>
+                <li>3. Pre-owned laptops are certified, professionally tested, and include the specified hardware warranty.</li>
+                <li>4. To confirm this order or request an invoice, contact us at <strong>${businessConfig.email}</strong> or <strong>${businessConfig.phone}</strong>.</li>
+            </ul>
+
+            ${quotation.notes ? `
+                <div class="notes-box">
+                    <strong>Special Notes:</strong> ${quotation.notes}
+                </div>
+            ` : ""}
+        </div>
+
+        <div>
+            <table class="totals-table">
+                <tr>
+                    <td>Items Subtotal:</td>
+                    <td>${formatCurrency(subtotal)}</td>
+                </tr>
+                ${discount > 0 ? `
+                    <tr>
+                        <td style="color: #dc2626;">Quotation Discount:</td>
+                        <td style="color: #dc2626;">-${formatCurrency(discount)}</td>
+                    </tr>
+                ` : ""}
+                <tr class="total-row">
+                    <td>Total Quoted Amount:</td>
+                    <td>${formatCurrency(totalAmount)}</td>
+                </tr>
+            </table>
+        </div>
+    </div>
+
+    <!-- Signatory -->
+    <div class="signature-section">
+        <div class="validity-seal">
+            ★ CERTIFIED OFFICIAL QUOTATION ★<br />
+            <span style="font-size: 9.5px; font-weight: normal; color: #3b82f6;">LAPTOP_GUY SALES & ESTIMATES</span>
+        </div>
+
+        <div class="signatory-box">
+            ${sigBase64 ? `<img src="${sigBase64}" class="sig-img" alt="Authorized Signature" />` : `<div style="height: 45px;"></div>`}
+            <div class="sign-line">For ${businessConfig.businessName}</div>
+            <div class="sign-sub">Authorized Signatory / Sales Desk</div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        Computer generated commercial quotation issued by ${businessConfig.businessName}. Contact: ${businessConfig.email} | Phone: ${businessConfig.phone}
+    </div>
+</body>
+</html>
+    `;
+};
+
+/**
+ * Generate PDF buffer for Quotation
+ */
+const generateQuotationPdf = async (quotation) => {
+    const htmlContent = generateQuotationHtml(quotation);
+    return renderHtmlToPdf(htmlContent);
+};
+
 module.exports = {
     generateInvoiceHtml,
-    generateInvoicePdf
+    generateInvoicePdf,
+    generateQuotationHtml,
+    generateQuotationPdf
 };

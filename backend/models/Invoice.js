@@ -99,6 +99,16 @@ const invoiceSchema = new mongoose.Schema(
 
         emailError: {
             type: String
+        },
+
+        reminderSentAt: {
+            type: Date,
+            default: null
+        },
+
+        reminderCount: {
+            type: Number,
+            default: 0
         }
     },
     {
