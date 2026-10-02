@@ -1102,7 +1102,7 @@ const sendPaymentReminderEmail = async ({
         </div>
         <div style="font-size: 13px; color: #334155; line-height: 1.6;">
           <div><strong>UPI ID:</strong> ${businessConfig.bankDetails?.upiId || " "}</div>
-          <div><strong>Google Pay / PhonePe:</strong> ${businessPhone}</div>
+          <div><strong>Google Pay / PhonePe:</strong> 7795330943</div>
           <div><strong>Bank:</strong> ${businessConfig.bankDetails?.bankName || " "}</div>
           <div><strong>Account No:</strong> ${businessConfig.bankDetails?.accountNumber || " "}</div>
           <div><strong>IFSC Code:</strong> ${businessConfig.bankDetails?.ifscCode || " "}</div>
