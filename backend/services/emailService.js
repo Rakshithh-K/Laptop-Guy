@@ -742,8 +742,8 @@ const sendOtpEmail = async ({ to, otp, purpose = "AUTHENTICATION" }) => {
   const businessEmail = businessConfig.email || "laptopguysales@gmail.com";
   const businessPhone = businessConfig.phone || "+91 7795330943";
 
-  const purposeText = purpose === "SETUP" 
-    ? "First-Time Admin Password Setup" 
+  const purposeText = purpose === "SETUP"
+    ? "First-Time Admin Password Setup"
     : "Admin Password Reset Request";
 
   const emailHtml = `
@@ -1101,11 +1101,11 @@ const sendPaymentReminderEmail = async ({
           How to Pay & Settle Balance
         </div>
         <div style="font-size: 13px; color: #334155; line-height: 1.6;">
-          <div><strong>UPI ID:</strong> ${businessConfig.bankDetails?.upiId || "nextgenlaptops@hdfcbank"}</div>
+          <div><strong>UPI ID:</strong> ${businessConfig.bankDetails?.upiId || " "}</div>
           <div><strong>Google Pay / PhonePe:</strong> ${businessPhone}</div>
-          <div><strong>Bank:</strong> ${businessConfig.bankDetails?.bankName || "HDFC Bank"}</div>
-          <div><strong>Account No:</strong> ${businessConfig.bankDetails?.accountNumber || "50200012345678"}</div>
-          <div><strong>IFSC Code:</strong> ${businessConfig.bankDetails?.ifscCode || "HDFC0001234"}</div>
+          <div><strong>Bank:</strong> ${businessConfig.bankDetails?.bankName || " "}</div>
+          <div><strong>Account No:</strong> ${businessConfig.bankDetails?.accountNumber || " "}</div>
+          <div><strong>IFSC Code:</strong> ${businessConfig.bankDetails?.ifscCode || " "}</div>
         </div>
       </div>
 
@@ -1137,11 +1137,11 @@ Invoice Details:
 - Outstanding Balance: ${formatCurrency(balance)}
 
 Payment Methods:
-- UPI ID: ${businessConfig.bankDetails?.upiId || "nextgenlaptops@hdfcbank"}
+- UPI ID: ${businessConfig.bankDetails?.upiId || " "}
 - PhonePe / GPay: ${businessPhone}
-- Bank: ${businessConfig.bankDetails?.bankName || "HDFC Bank"}
-- Account No: ${businessConfig.bankDetails?.accountNumber || "50200012345678"}
-- IFSC: ${businessConfig.bankDetails?.ifscCode || "HDFC0001234"}
+- Bank: ${businessConfig.bankDetails?.bankName || " "}
+- Account No: ${businessConfig.bankDetails?.accountNumber || " "}
+- IFSC: ${businessConfig.bankDetails?.ifscCode || " "}
 
 If you have already paid, please reply with your transaction reference. Thank you!
 ${businessName}

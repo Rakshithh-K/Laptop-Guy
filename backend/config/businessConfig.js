@@ -8,10 +8,10 @@ module.exports = {
     website: "www.nextgenlaptops.com",
     //gstin: "29AAAAA0000A1Z5",
     bankDetails: {
-        bankName: "HDFC Bank",
-        accountNumber: "50200012345678",
-        ifscCode: "HDFC0001234",
-        upiId: "nextgenlaptops@hdfcbank"
+        bankName: " ",
+        accountNumber: " ",
+        ifscCode: " ",
+        upiId: " "
     },
     invoiceTerms: [
         "1. Used / Pre-owned laptops are sold in thoroughly tested working condition.",
