@@ -11,11 +11,14 @@ import {
   Calendar,
   IndianRupee,
   Send,
-  Mail
+  Mail,
+  Trash2,
+  AlertTriangle
 } from "lucide-react";
 import StatusBadge from "../components/StatusBadge";
 import Toast from "../components/Toast";
-import { getInvoices, downloadInvoicePdf, sendInvoice } from "../api/invoiceApi";
+import Modal from "../components/Modal";
+import { getInvoices, downloadInvoicePdf, sendInvoice, deleteInvoice } from "../api/invoiceApi";
 
 export default function Invoices() {
   const navigate = useNavigate();
@@ -28,6 +31,9 @@ export default function Invoices() {
   const [paymentStatusFilter, setPaymentStatusFilter] = useState("ALL");
   const [downloadingId, setDownloadingId] = useState(null);
   const [sendingId, setSendingId] = useState(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [invoiceToDelete, setInvoiceToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [toast, setToast] = useState(null);
 
   const fetchInvoices = async () => {
@@ -91,6 +97,28 @@ export default function Invoices() {
       showToast(err.customMessage || "Unable to send invoice. Please try again.", "error");
     } finally {
       setSendingId(null);
+    }
+  };
+
+  const handleOpenDeleteModal = (e, invoice) => {
+    e.stopPropagation();
+    setInvoiceToDelete(invoice);
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!invoiceToDelete) return;
+    setDeleting(true);
+    try {
+      const res = await deleteInvoice(invoiceToDelete._id);
+      showToast(res.message || `Invoice ${invoiceToDelete.invoiceNumber} deleted and items restored to inventory.`, "success");
+      setDeleteModalOpen(false);
+      setInvoiceToDelete(null);
+      fetchInvoices();
+    } catch (err) {
+      showToast(err.customMessage || "Failed to delete invoice.", "error");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -364,6 +392,17 @@ export default function Invoices() {
                           <Download size={13} />
                           <span>{downloadingId === inv._id ? "..." : "PDF"}</span>
                         </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          title="Delete Invoice and restore items"
+                          style={{ color: "#dc2626", borderColor: "#fecaca" }}
+                          onClick={(e) => handleOpenDeleteModal(e, inv)}
+                        >
+                          <Trash2 size={13} />
+                          <span>Delete</span>
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -373,6 +412,126 @@ export default function Invoices() {
           </table>
         </div>
       )}
+
+      {/* Delete Invoice Confirmation Modal */}
+      <Modal
+        isOpen={deleteModalOpen}
+        onClose={() => {
+          if (!deleting) {
+            setDeleteModalOpen(false);
+            setInvoiceToDelete(null);
+          }
+        }}
+        title="Delete Invoice & Restore Inventory"
+        size="md"
+      >
+        {invoiceToDelete && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div style={{
+              display: "flex",
+              gap: "12px",
+              padding: "12px 14px",
+              backgroundColor: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: "8px",
+              color: "#991b1b"
+            }}>
+              <AlertTriangle size={24} style={{ flexShrink: 0, marginTop: "2px", color: "#dc2626" }} />
+              <div style={{ fontSize: "13px", lineHeight: "1.5" }}>
+                <div style={{ fontWeight: 700, marginBottom: "4px" }}>
+                  Are you sure you want to delete Invoice #{invoiceToDelete.invoiceNumber}?
+                </div>
+                <div>
+                  This action is permanent and will perform the following automatic adjustments:
+                </div>
+                <ul style={{ paddingLeft: "18px", marginTop: "6px", marginBottom: "0" }}>
+                  <li>All billed laptop(s) will be set back to <strong>AVAILABLE</strong> in inventory.</li>
+                  <li>The invoice amount (<strong>{formatCurrency(invoiceToDelete.totalAmount)}</strong>) will be reversed from total sales and profit.</li>
+                  <li>Inventory investment valuation will automatically recalculate to include these restored units.</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Invoice Summary Box */}
+            <div style={{
+              backgroundColor: "#f8fafc",
+              border: "1px solid #e2e8f0",
+              borderRadius: "8px",
+              padding: "12px 16px",
+              fontSize: "13px"
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                <span style={{ color: "#64748b" }}>Customer:</span>
+                <span style={{ fontWeight: 600, color: "#0f172a" }}>{invoiceToDelete.customer?.name || "Customer"}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
+                <span style={{ color: "#64748b" }}>Total Bill Amount:</span>
+                <span style={{ fontWeight: 700, color: "#0f172a" }}>{formatCurrency(invoiceToDelete.totalAmount)}</span>
+              </div>
+              <div>
+                <span style={{ color: "#64748b" }}>Items being returned to stock:</span>
+                <div style={{ marginTop: "6px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  {(() => {
+                    const items = (invoiceToDelete.items && invoiceToDelete.items.length > 0)
+                      ? invoiceToDelete.items
+                      : (invoiceToDelete.laptop ? [{ laptop: invoiceToDelete.laptop }] : []);
+                    return items.map((it, idx) => {
+                      const l = it.laptop || {};
+                      return (
+                        <div key={idx} style={{
+                          padding: "6px 10px",
+                          backgroundColor: "#ffffff",
+                          borderRadius: "6px",
+                          border: "1px solid #e2e8f0",
+                          fontSize: "12px",
+                          display: "flex",
+                          justifyContent: "space-between"
+                        }}>
+                          <span style={{ fontWeight: 600, color: "#0f172a" }}>
+                            {l.brand} {l.model}
+                          </span>
+                          <span style={{ fontFamily: "var(--font-mono)", color: "#64748b" }}>
+                            S/N: {l.serialNumber || "N/A"}
+                          </span>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "8px" }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setDeleteModalOpen(false);
+                  setInvoiceToDelete(null);
+                }}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                style={{
+                  backgroundColor: "#dc2626",
+                  color: "#ffffff",
+                  borderColor: "#dc2626"
+                }}
+                onClick={handleConfirmDelete}
+                disabled={deleting}
+              >
+                <Trash2 size={15} />
+                <span>{deleting ? "Deleting & Restoring..." : "Delete & Restore Items"}</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* Toast */}
       {toast && (

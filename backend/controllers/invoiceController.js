@@ -528,10 +528,65 @@ const sendInvoice = async (req, res, next) => {
     }
 };
 
+// @desc    Delete invoice, restore all billed laptops to AVAILABLE in inventory, and cleanup returns
+// @route   DELETE /api/invoices/:id
+const deleteInvoice = async (req, res, next) => {
+    try {
+        const invoice = await Invoice.findById(req.params.id);
+
+        if (!invoice) {
+            return res.status(404).json({
+                success: false,
+                message: "Invoice not found."
+            });
+        }
+
+        // Collect all laptop IDs from the invoice (multi-item and legacy format)
+        const laptopIds = [];
+        if (Array.isArray(invoice.items) && invoice.items.length > 0) {
+            invoice.items.forEach(item => {
+                const id = item.laptop?._id || item.laptop;
+                if (id) {
+                    laptopIds.push(id.toString());
+                }
+            });
+        }
+        if (invoice.laptop) {
+            const legacyId = invoice.laptop?._id || invoice.laptop;
+            if (legacyId && !laptopIds.includes(legacyId.toString())) {
+                laptopIds.push(legacyId.toString());
+            }
+        }
+
+        // 1. Restore all associated laptops back to AVAILABLE in inventory
+        if (laptopIds.length > 0) {
+            await Laptop.updateMany(
+                { _id: { $in: laptopIds } },
+                { $set: { status: "AVAILABLE" } }
+            );
+        }
+
+        // 2. Remove any Return records linked to this invoice
+        await Return.deleteMany({ invoice: invoice._id });
+
+        // 3. Delete the invoice itself
+        await Invoice.findByIdAndDelete(invoice._id);
+
+        res.status(200).json({
+            success: true,
+            message: `Invoice ${invoice.invoiceNumber} deleted successfully. ${laptopIds.length} laptop(s) restored back to inventory as AVAILABLE.`,
+            restoredCount: laptopIds.length
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
 module.exports = {
     createInvoice,
     getInvoices,
     getInvoiceById,
     getInvoicePdf,
-    sendInvoice
+    sendInvoice,
+    deleteInvoice
 };

@@ -32,7 +32,7 @@ const invoiceSchema = new mongoose.Schema(
         // Multi-product items array
         items: [invoiceItemSchema],
 
-        // Legacy / single product reference preserved for backward compatibility
+        // Legacy fields preserved for backward compatibility
         laptop: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "Laptop"
@@ -84,11 +84,9 @@ const invoiceSchema = new mongoose.Schema(
         },
 
         warranty: {
-            type: String,
-            default: "30 Days Hardware Warranty"
+            type: String
         },
 
-        // Email delivery tracking fields
         emailStatus: {
             type: String,
             enum: ["PENDING", "SENT", "FAILED"],
@@ -96,13 +94,11 @@ const invoiceSchema = new mongoose.Schema(
         },
 
         emailSentAt: {
-            type: Date,
-            default: null
+            type: Date
         },
 
         emailError: {
-            type: String,
-            default: null
+            type: String
         }
     },
     {
@@ -110,4 +106,6 @@ const invoiceSchema = new mongoose.Schema(
     }
 );
 
-module.exports = mongoose.model("Invoice", invoiceSchema);
+const Invoice = mongoose.model("Invoice", invoiceSchema);
+
+module.exports = Invoice;
