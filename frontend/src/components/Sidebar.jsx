@@ -53,7 +53,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
     <>
       {/* Mobile Drawer Backdrop Overlay */}
       {isOpen && (
-        <div 
+        <div
           className="sidebar-backdrop"
           onClick={onClose}
           aria-hidden="true"
@@ -64,10 +64,10 @@ export default function Sidebar({ isOpen = false, onClose }) {
         <div className="sidebar-header">
           <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
             <div className="sidebar-logo" style={{ overflow: "hidden", padding: 0 }}>
-              <img 
-                src={logoImg} 
-                alt="Laptop Guy Logo" 
-                style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }} 
+              <img
+                src={logoImg}
+                alt="Laptop Guy Logo"
+                style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "8px" }}
               />
             </div>
             <div>
@@ -173,11 +173,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
             <span>Sign Out</span>
           </button>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#10b981", fontWeight: 600 }}>
-            <ShieldCheck size={14} />
-            <span>GST Ready & Certified</span>
-          </div>
-          <div>System Version 1.0.0</div>
+
         </div>
       </aside>
     </>
