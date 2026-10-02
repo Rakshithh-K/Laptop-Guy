@@ -343,6 +343,17 @@ body {
   box-shadow: var(--shadow-md);
 }
 
+.stat-card-clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.stat-card-clickable:hover {
+  transform: translateY(-3px);
+  border-color: #93c5fd;
+  box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
 .stat-card-left {
   display: flex;
   flex-direction: column;

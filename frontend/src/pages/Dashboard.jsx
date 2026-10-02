@@ -174,28 +174,31 @@ export default function Dashboard() {
         <StatCard
           title="Total Laptops"
           value={metrics.totalLaptops || 0}
-          sub={`${metrics.availableLaptops || 0} Available in Stock`}
+          sub={`${metrics.availableLaptops || 0} Available in Stock · View Inventory →`}
           icon={Laptop}
           iconBg="#eff6ff"
           iconColor="#2563eb"
+          onClick={() => navigate("/inventory")}
         />
 
         <StatCard
           title="Available Stock"
           value={metrics.availableLaptops || 0}
-          sub={`Value: ${displayAmount(metrics.stockSellingValue)}`}
+          sub={`Value: ${displayAmount(metrics.stockSellingValue)} · View Available →`}
           icon={CheckCircle2}
           iconBg="#ecfdf5"
           iconColor="#059669"
+          onClick={() => navigate("/inventory?status=AVAILABLE")}
         />
 
         <StatCard
           title="Sold Units"
           value={metrics.soldLaptops || 0}
-          sub={`${metrics.totalCustomers || 0} Registered Buyers`}
+          sub={`${metrics.totalCustomers || 0} Registered Buyers · View Sold →`}
           icon={ShoppingBag}
           iconBg="#f5f3ff"
           iconColor="#7c3aed"
+          onClick={() => navigate("/inventory?status=SOLD")}
         />
 
         <StatCard
@@ -241,10 +244,12 @@ export default function Dashboard() {
         <StatCard
           title="Pending Payments"
           value={displayAmount(metrics.pendingPayments)}
-          sub="Outstanding receivables"
+          sub="Outstanding receivables · View Payments →"
+          badge={metrics.pendingPayments > 0 ? "Unpaid" : undefined}
           icon={Clock}
           iconBg="#fef2f2"
           iconColor="#dc2626"
+          onClick={() => navigate("/pending-payments")}
         />
       </div>
 

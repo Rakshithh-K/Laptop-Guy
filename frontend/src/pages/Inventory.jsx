@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { 
   Laptop, 
   Search, 
@@ -16,13 +17,19 @@ import Toast from "../components/Toast";
 import { getLaptops, deleteLaptop } from "../api/laptopApi";
 
 export default function Inventory() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const urlStatus = searchParams.get("status");
+  const validStatus = (urlStatus && ["AVAILABLE", "SOLD", "ALL"].includes(urlStatus.toUpperCase()))
+    ? urlStatus.toUpperCase()
+    : "ALL";
+
   const [laptops, setLaptops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   
   // Search & Filter
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [statusFilter, setStatusFilter] = useState(validStatus);
 
   // Modals & Selected Laptop
   const [modalOpen, setModalOpen] = useState(false);
@@ -48,6 +55,24 @@ export default function Inventory() {
   useEffect(() => {
     fetchInventory();
   }, [statusFilter]);
+
+  useEffect(() => {
+    const currentUrlStatus = searchParams.get("status");
+    if (currentUrlStatus && ["AVAILABLE", "SOLD", "ALL"].includes(currentUrlStatus.toUpperCase())) {
+      setStatusFilter(currentUrlStatus.toUpperCase());
+    } else if (!currentUrlStatus && statusFilter !== "ALL") {
+      setStatusFilter("ALL");
+    }
+  }, [searchParams]);
+
+  const handleTabClick = (status) => {
+    setStatusFilter(status);
+    if (status === "ALL") {
+      setSearchParams({});
+    } else {
+      setSearchParams({ status });
+    }
+  };
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -147,21 +172,21 @@ export default function Inventory() {
           <button
             type="button"
             className={`filter-tab ${statusFilter === "ALL" ? "active" : ""}`}
-            onClick={() => setStatusFilter("ALL")}
+            onClick={() => handleTabClick("ALL")}
           >
             All Stock
           </button>
           <button
             type="button"
             className={`filter-tab ${statusFilter === "AVAILABLE" ? "active" : ""}`}
-            onClick={() => setStatusFilter("AVAILABLE")}
+            onClick={() => handleTabClick("AVAILABLE")}
           >
             Available Only
           </button>
           <button
             type="button"
             className={`filter-tab ${statusFilter === "SOLD" ? "active" : ""}`}
-            onClick={() => setStatusFilter("SOLD")}
+            onClick={() => handleTabClick("SOLD")}
           >
             Sold
           </button>
